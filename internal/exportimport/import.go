@@ -191,9 +191,21 @@ func (s *Store) importMeal(ctx context.Context, userID uuid.UUID, m Meal, nutrie
 		labelIDs = append(labelIDs, label.ID)
 	}
 
+	favoriteCategoryIDs := make([]uuid.UUID, 0, len(m.FavoriteCategories))
+	for _, name := range m.FavoriteCategories {
+		cat, err := s.q.GetMealCategoryByName(ctx, name)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // category not present in this instance/import — drop the favorite, not a hard failure
+		}
+		if err != nil {
+			return false, fmt.Errorf("look up category %q: %w", name, err)
+		}
+		favoriteCategoryIDs = append(favoriteCategoryIDs, cat.ID)
+	}
+
 	input := mealslib.MealInput{
 		Name: m.Name, RecipeURL: m.RecipeURL, ServingLabel: m.ServingLabel, ServingAmount: m.ServingAmount,
-		IsFavorite: m.IsFavorite, NutrientAmounts: amounts, LabelIDs: labelIDs,
+		FavoriteCategoryIDs: favoriteCategoryIDs, NutrientAmounts: amounts, LabelIDs: labelIDs,
 	}
 
 	if m.Source == "manual" {

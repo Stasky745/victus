@@ -96,15 +96,15 @@ type MealRef struct {
 // Meal is a full meal-library entry. NutrientAmounts is keyed by the
 // nutrient's fixed seed key (e.g. "calories"), not its id, since ids aren't
 // portable — the key is (every install has the same seeded nutrient
-// registry). Labels is a list of label names.
+// registry). Labels and FavoriteCategories are lists of names.
 type Meal struct {
 	MealRef
-	RecipeURL       string             `json:"recipe_url,omitempty"`
-	ServingLabel    string             `json:"serving_label"`
-	ServingAmount   float64            `json:"serving_amount"`
-	IsFavorite      bool               `json:"is_favorite"`
-	NutrientAmounts map[string]float64 `json:"nutrient_amounts,omitempty"`
-	Labels          []string           `json:"labels,omitempty"`
+	RecipeURL          string             `json:"recipe_url,omitempty"`
+	ServingLabel       string             `json:"serving_label"`
+	ServingAmount      float64            `json:"serving_amount"`
+	FavoriteCategories []string           `json:"favorite_categories,omitempty"`
+	NutrientAmounts    map[string]float64 `json:"nutrient_amounts,omitempty"`
+	Labels             []string           `json:"labels,omitempty"`
 }
 
 // Goal is one nutrient's configured range for the exporting user, keyed by

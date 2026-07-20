@@ -57,7 +57,8 @@ func TestClient_GetByBarcode_ParsesNutrimentsAndConvertsUnits(t *testing.T) {
 					"fat_100g": 30.9,
 					"saturated-fat_100g": 10.6,
 					"sugars_100g": 56.3,
-					"sodium_100g": 0.0428
+					"sodium_100g": 0.0428,
+					"salt_100g": 0.11
 				}
 			}
 		}`))
@@ -86,6 +87,11 @@ func TestClient_GetByBarcode_ParsesNutrimentsAndConvertsUnits(t *testing.T) {
 	// 0.0428g -> 42.8mg: the critical gram-to-milligram conversion.
 	if got, want := amounts["sodium_mg"], 42.8; got < want-0.001 || got > want+0.001 {
 		t.Errorf("sodium_mg = %v, want %v (0.0428g converted to mg)", got, want)
+	}
+	// salt_g stays in grams, unconverted — Victus tracks it separately from
+	// sodium_mg specifically to match what's printed on packaging.
+	if got, want := amounts["salt_g"], 0.11; got < want-0.001 || got > want+0.001 {
+		t.Errorf("salt_g = %v, want %v (unconverted)", got, want)
 	}
 	// Not present in the response at all — must be omitted, not zero.
 	if _, ok := amounts["fiber_g"]; ok {

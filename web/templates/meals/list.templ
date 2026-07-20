@@ -8,7 +8,7 @@ import (
 	"github.com/Stasky745/victus/web/templates/layout"
 )
 
-templ ListPage(csrfToken string, mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label, allLabels []sqlc.MealLabel, activeLabelID uuid.UUID) {
+templ ListPage(csrfToken string, mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label, favoriteCategoriesByMeal map[uuid.UUID][]mealslib.FavoriteCategory, allLabels []sqlc.MealLabel, activeLabelID uuid.UUID) {
 	@layout.Base("Meal Library", csrfToken) {
 		<div class="mb-4 flex items-center justify-between">
 			<h1 class="text-lg font-semibold">Meal Library</h1>
@@ -47,12 +47,12 @@ templ ListPage(csrfToken string, mealsList []sqlc.Meal, labelsByMeal map[uuid.UU
 			hx-include="#label-filter-value"
 		/>
 		<div id="meal-results">
-			@Results(mealsList, labelsByMeal)
+			@Results(mealsList, labelsByMeal, favoriteCategoriesByMeal)
 		</div>
 	}
 }
 
-templ Results(mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label) {
+templ Results(mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label, favoriteCategoriesByMeal map[uuid.UUID][]mealslib.FavoriteCategory) {
 	if len(mealsList) == 0 {
 		<p class="vx-empty">
 			No meals found.
@@ -60,31 +60,20 @@ templ Results(mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label
 	} else {
 		<ul class="vx-list">
 			for _, m := range mealsList {
-				@ResultItem(m, labelsByMeal)
+				@ResultItem(m, labelsByMeal, favoriteCategoriesByMeal)
 			}
 		</ul>
 	}
 }
 
-templ ResultItem(m sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label) {
+templ ResultItem(m sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label, favoriteCategoriesByMeal map[uuid.UUID][]mealslib.FavoriteCategory) {
 	<li id={ "meal-" + idString(m.ID) } class="flex items-center justify-between px-4 py-3">
 		<div>
 			<div class="flex items-center gap-2">
-				<button
-					type="button"
-					hx-post={ "/meals/" + idString(m.ID) + "/favorite" }
-					hx-target={ "#meal-" + idString(m.ID) }
-					hx-swap="outerHTML"
-					aria-label="Toggle favorite"
-					class={ "text-sm", templ.KV("text-amber-500", m.IsFavorite), templ.KV("text-slate-300 dark:text-vxborder", !m.IsFavorite) }
-				>
-					if m.IsFavorite {
-						★
-					} else {
-						☆
-					}
-				</button>
 				<div class="text-sm font-medium">{ m.Name }</div>
+				for _, c := range favoriteCategoriesByMeal[m.ID] {
+					<span class="vx-badge-amber" title={ "Favorite for " + c.Name }>★ { c.Name }</span>
+				}
 				for _, l := range labelsByMeal[m.ID] {
 					<span class={ labelBadgeClass(l.Color) }>{ l.Name }</span>
 				}

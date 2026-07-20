@@ -25,15 +25,15 @@ SELECT * FROM meals WHERE source = sqlc.arg(source) AND source_ref = sqlc.arg(so
 SELECT * FROM meals WHERE source = 'manual' AND name = sqlc.arg(name);
 
 -- name: CreateMeal :one
-INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, is_favorite)
+INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by)
 VALUES (sqlc.arg(id), sqlc.arg(name), sqlc.arg(source), sqlc.arg(source_ref), sqlc.arg(recipe_url),
-        sqlc.arg(serving_label), sqlc.arg(serving_amount), sqlc.arg(created_by), sqlc.arg(is_favorite))
+        sqlc.arg(serving_label), sqlc.arg(serving_amount), sqlc.arg(created_by))
 RETURNING *;
 
 -- name: UpdateMeal :one
 UPDATE meals
 SET name = sqlc.arg(name), recipe_url = sqlc.arg(recipe_url), serving_label = sqlc.arg(serving_label),
-    serving_amount = sqlc.arg(serving_amount), is_favorite = sqlc.arg(is_favorite), updated_at = CURRENT_TIMESTAMP
+    serving_amount = sqlc.arg(serving_amount), updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
@@ -67,13 +67,43 @@ ORDER BY nutrients.sort_order;
 -- name: ClearMealNutrientValues :exec
 DELETE FROM meal_nutrient_values WHERE meal_id = sqlc.arg(meal_id);
 
--- name: ToggleMealFavorite :one
--- A single atomic flip rather than read-then-write from the caller, so a
--- double-click (or two tabs) can't race into an inconsistent end state.
-UPDATE meals SET is_favorite = NOT is_favorite WHERE id = sqlc.arg(id) RETURNING *;
+-- name: IsMealFavoriteForCategory :one
+SELECT EXISTS(
+    SELECT 1 FROM meal_favorite_categories WHERE meal_id = sqlc.arg(meal_id) AND category_id = sqlc.arg(category_id)
+);
 
--- name: ListFavoriteMeals :many
-SELECT * FROM meals WHERE is_favorite ORDER BY name;
+-- name: AddMealFavoriteCategory :exec
+INSERT INTO meal_favorite_categories (meal_id, category_id)
+VALUES (sqlc.arg(meal_id), sqlc.arg(category_id))
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveMealFavoriteCategory :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = sqlc.arg(meal_id) AND category_id = sqlc.arg(category_id);
+
+-- name: ClearMealFavoriteCategories :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = sqlc.arg(meal_id);
+
+-- name: ListFavoriteMealsForCategory :many
+SELECT meals.*
+FROM meals
+JOIN meal_favorite_categories ON meal_favorite_categories.meal_id = meals.id
+WHERE meal_favorite_categories.category_id = sqlc.arg(category_id)
+ORDER BY meals.name;
+
+-- name: ListFavoriteCategoryIDsForMeal :many
+-- The favorited category ids for one meal - used to pre-check the edit
+-- form's category checkboxes.
+SELECT category_id FROM meal_favorite_categories WHERE meal_id = sqlc.arg(meal_id);
+
+-- name: ListFavoriteCategoriesForMeals :many
+-- Batched (not one query per meal) favorite-category lookup for a list of
+-- meals - the Meal Library list page's badges, fetched in one round trip
+-- regardless of how many meals are on the page.
+SELECT meal_favorite_categories.meal_id, meal_categories.id, meal_categories.name
+FROM meal_favorite_categories
+JOIN meal_categories ON meal_categories.id = meal_favorite_categories.category_id
+WHERE meal_favorite_categories.meal_id IN (sqlc.slice('meal_ids'))
+ORDER BY meal_categories.sort_order, meal_categories.name;
 
 -- name: ListMealsByLabel :many
 SELECT meals.*

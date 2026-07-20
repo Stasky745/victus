@@ -37,12 +37,17 @@ func (s *Server) handleMealsList(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to load meal labels", err)
 		return
 	}
+	favoriteCategoriesByMeal, err := s.meals.FavoriteCategoriesForMeals(r.Context(), list)
+	if err != nil {
+		httperr.Internal(w, r, "failed to load meal favorite categories", err)
+		return
+	}
 	allLabels, err := s.meals.ListLabels(r.Context())
 	if err != nil {
 		httperr.Internal(w, r, "failed to list labels", err)
 		return
 	}
-	if err := meals.ListPage(csrf.Token(r), list, labelsByMeal, allLabels, labelID).Render(r.Context(), w); err != nil {
+	if err := meals.ListPage(csrf.Token(r), list, labelsByMeal, favoriteCategoriesByMeal, allLabels, labelID).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render meals list", "error", err)
 	}
 }
@@ -61,8 +66,13 @@ func (s *Server) handleMealsSearch(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to load meal labels", err)
 		return
 	}
+	favoriteCategoriesByMeal, err := s.meals.FavoriteCategoriesForMeals(r.Context(), list)
+	if err != nil {
+		httperr.Internal(w, r, "failed to load meal favorite categories", err)
+		return
+	}
 
-	if err := meals.Results(list, labelsByMeal).Render(r.Context(), w); err != nil {
+	if err := meals.Results(list, labelsByMeal, favoriteCategoriesByMeal).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render meal search results", "error", err)
 	}
 }
@@ -84,31 +94,6 @@ func (s *Server) searchMealsFiltered(ctx context.Context, q string, labelID uuid
 	}
 }
 
-func (s *Server) handleMealToggleFavorite(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		http.Error(w, "invalid meal id", http.StatusBadRequest)
-		return
-	}
-	m, err := s.meals.ToggleFavorite(r.Context(), id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			http.NotFound(w, r)
-			return
-		}
-		httperr.Internal(w, r, "failed to toggle meal favorite", err, "meal_id", id)
-		return
-	}
-	labels, err := s.meals.LabelsForMeal(r.Context(), id)
-	if err != nil {
-		httperr.Internal(w, r, "failed to load meal labels", err, "meal_id", id)
-		return
-	}
-	if err := meals.ResultItem(m, map[uuid.UUID][]mealslib.Label{id: labels}).Render(r.Context(), w); err != nil {
-		slog.ErrorContext(r.Context(), "failed to render meal after favorite toggle", "error", err)
-	}
-}
-
 func (s *Server) handleMealNewForm(w http.ResponseWriter, r *http.Request) {
 	blank, err := s.meals.NewMeal(r.Context())
 	if err != nil {
@@ -120,7 +105,12 @@ func (s *Server) handleMealNewForm(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to list meal labels", err)
 		return
 	}
-	if err := meals.FormPage(csrf.Token(r), blank, allLabels, false, "").Render(r.Context(), w); err != nil {
+	allCategories, err := s.meals.ListCategories(r.Context())
+	if err != nil {
+		httperr.Internal(w, r, "failed to list meal categories", err)
+		return
+	}
+	if err := meals.FormPage(csrf.Token(r), blank, allLabels, allCategories, false, "").Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render new meal form", "error", err)
 	}
 }
@@ -145,7 +135,12 @@ func (s *Server) handleMealEditForm(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to list meal labels", err)
 		return
 	}
-	if err := meals.FormPage(csrf.Token(r), meal, allLabels, true, "").Render(r.Context(), w); err != nil {
+	allCategories, err := s.meals.ListCategories(r.Context())
+	if err != nil {
+		httperr.Internal(w, r, "failed to list meal categories", err)
+		return
+	}
+	if err := meals.FormPage(csrf.Token(r), meal, allLabels, allCategories, true, "").Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render edit meal form", "error", err)
 	}
 }
@@ -219,8 +214,13 @@ func (s *Server) rerenderMealForm(w http.ResponseWriter, r *http.Request, meal m
 		httperr.Internal(w, r, "failed to list meal labels", err)
 		return
 	}
+	allCategories, err := s.meals.ListCategories(r.Context())
+	if err != nil {
+		httperr.Internal(w, r, "failed to list meal categories", err)
+		return
+	}
 	w.WriteHeader(http.StatusUnprocessableEntity)
-	if err := meals.FormPage(csrf.Token(r), meal, allLabels, isEdit, errMsg).Render(r.Context(), w); err != nil {
+	if err := meals.FormPage(csrf.Token(r), meal, allLabels, allCategories, isEdit, errMsg).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render meal form", "error", err)
 	}
 }
@@ -302,30 +302,46 @@ func (s *Server) buildMealForm(r *http.Request) (mealslib.Meal, mealslib.MealInp
 		}
 	}
 
-	isFavorite := r.FormValue("is_favorite") == "true"
+	// Same "drop stale/invalid ids rather than failing the whole form" rule
+	// as label_ids above.
+	favoriteCategoryIDs := parseUUIDs(r.Form["favorite_category_ids"])
+	allCategories, err := s.meals.ListCategories(r.Context())
+	if err != nil {
+		return mealslib.Meal{}, mealslib.MealInput{}, errors.New("couldn't load the category list")
+	}
+	byCategoryID := make(map[uuid.UUID]sqlc.MealCategory, len(allCategories))
+	for _, c := range allCategories {
+		byCategoryID[c.ID] = c
+	}
+	selectedFavoriteCategories := make([]mealslib.FavoriteCategory, 0, len(favoriteCategoryIDs))
+	for _, id := range favoriteCategoryIDs {
+		if c, ok := byCategoryID[id]; ok {
+			selectedFavoriteCategories = append(selectedFavoriteCategories, mealslib.FavoriteCategory{ID: id, Name: c.Name})
+		}
+	}
 
 	display := mealslib.Meal{
-		Name:           name,
-		RecipeURL:      recipeURL,
-		ServingLabel:   servingLabel,
-		ServingAmount:  servingAmount,
-		IsFavorite:     isFavorite,
-		NutrientValues: displayValues,
-		Labels:         selectedLabels,
+		Name:               name,
+		RecipeURL:          recipeURL,
+		ServingLabel:       servingLabel,
+		ServingAmount:      servingAmount,
+		FavoriteCategories: selectedFavoriteCategories,
+		NutrientValues:     displayValues,
+		Labels:             selectedLabels,
 	}
 
 	if len(problems) > 0 {
-		return display, mealslib.MealInput{LabelIDs: labelIDs}, errors.New(strings.Join(problems, "; "))
+		return display, mealslib.MealInput{LabelIDs: labelIDs, FavoriteCategoryIDs: favoriteCategoryIDs}, errors.New(strings.Join(problems, "; "))
 	}
 
 	return display, mealslib.MealInput{
-		Name:            name,
-		RecipeURL:       recipeURL,
-		ServingLabel:    servingLabel,
-		ServingAmount:   servingAmount,
-		IsFavorite:      isFavorite,
-		NutrientAmounts: amounts,
-		LabelIDs:        labelIDs,
+		Name:                name,
+		RecipeURL:           recipeURL,
+		ServingLabel:        servingLabel,
+		ServingAmount:       servingAmount,
+		FavoriteCategoryIDs: favoriteCategoryIDs,
+		NutrientAmounts:     amounts,
+		LabelIDs:            labelIDs,
 	}, nil
 }
 

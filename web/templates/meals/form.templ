@@ -8,7 +8,7 @@ import (
 	"github.com/Stasky745/victus/web/templates/layout"
 )
 
-templ FormPage(csrfToken string, meal mealslib.Meal, allLabels []sqlc.MealLabel, isEdit bool, errorMsg string) {
+templ FormPage(csrfToken string, meal mealslib.Meal, allLabels []sqlc.MealLabel, allCategories []sqlc.MealCategory, isEdit bool, errorMsg string) {
 	@layout.Base(formTitle(isEdit), csrfToken) {
 		<h1 class="mb-4 text-lg font-semibold">{ formTitle(isEdit) }</h1>
 		if errorMsg != "" {
@@ -36,10 +36,20 @@ templ FormPage(csrfToken string, meal mealslib.Meal, allLabels []sqlc.MealLabel,
 					<span class="font-normal text-slate-500 dark:text-slate-400">(optional — link to the actual recipe)</span>
 					<input type="url" name="recipe_url" value={ meal.RecipeURL } placeholder="https://…" class="vx-input"/>
 				</label>
-				<label class="mt-4 flex items-center gap-2 text-sm">
-					<input type="checkbox" name="is_favorite" value="true" checked?={ meal.IsFavorite }/>
-					Favorite — show as a one-click quick-add on the Day/Week/Default builders
-				</label>
+				if len(allCategories) > 0 {
+					<div class="mt-4">
+						<div class="vx-label mb-1">Favorite for</div>
+						<p class="mb-1 text-xs text-slate-500 dark:text-slate-400">Shows as a one-click quick-add on the Day/Default Day builders, only for the categories checked here.</p>
+						<div class="flex flex-wrap gap-3">
+							for _, c := range allCategories {
+								<label class="flex cursor-pointer items-center gap-1.5 text-sm">
+									<input type="checkbox" name="favorite_category_ids" value={ idString(c.ID) } checked?={ hasFavoriteCategory(meal.FavoriteCategories, c.ID) }/>
+									{ c.Name }
+								</label>
+							}
+						</div>
+					</div>
+				}
 				if len(allLabels) > 0 {
 					<div class="mt-4">
 						<div class="vx-label mb-1">Labels</div>

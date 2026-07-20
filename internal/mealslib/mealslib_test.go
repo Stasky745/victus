@@ -464,17 +464,32 @@ func TestStore_NutrientIDsByKey(t *testing.T) {
 	}
 }
 
-func TestStore_ToggleFavorite_RoundTrips(t *testing.T) {
+// twoCategories returns two distinct seeded meal categories for tests that
+// need to prove favorites are scoped per category rather than global.
+func twoCategories(t *testing.T, store *mealslib.Store) (uuid.UUID, uuid.UUID) {
+	t.Helper()
+	cats, err := store.ListCategories(t.Context())
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	if len(cats) < 2 {
+		t.Fatalf("expected at least 2 seeded categories, got %d", len(cats))
+	}
+	return cats[0].ID, cats[1].ID
+}
+
+func TestStore_ToggleFavoriteCategory_RoundTrips(t *testing.T) {
 	store, q := newTestStore(t)
 	ctx := t.Context()
 	userID := newTestUser(t, q)
+	categoryA, _ := twoCategories(t, store)
 
 	id, err := store.Create(ctx, userID, mealslib.MealInput{Name: "Toast", ServingLabel: "per serving", ServingAmount: 1})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	favorites, err := store.ListFavorites(ctx)
+	favorites, err := store.ListFavorites(ctx, categoryA)
 	if err != nil {
 		t.Fatalf("list favorites: %v", err)
 	}
@@ -482,14 +497,14 @@ func TestStore_ToggleFavorite_RoundTrips(t *testing.T) {
 		t.Fatal("a freshly created meal should not start as a favorite")
 	}
 
-	m, err := store.ToggleFavorite(ctx, id)
+	isFavorite, err := store.ToggleFavoriteCategory(ctx, id, categoryA)
 	if err != nil {
 		t.Fatalf("toggle favorite: %v", err)
 	}
-	if !m.IsFavorite {
+	if !isFavorite {
 		t.Error("expected the meal to be favorited after the first toggle")
 	}
-	favorites, err = store.ListFavorites(ctx)
+	favorites, err = store.ListFavorites(ctx, categoryA)
 	if err != nil {
 		t.Fatalf("list favorites: %v", err)
 	}
@@ -497,19 +512,55 @@ func TestStore_ToggleFavorite_RoundTrips(t *testing.T) {
 		t.Error("expected the toggled meal to appear in ListFavorites")
 	}
 
-	m, err = store.ToggleFavorite(ctx, id)
+	isFavorite, err = store.ToggleFavoriteCategory(ctx, id, categoryA)
 	if err != nil {
 		t.Fatalf("toggle favorite again: %v", err)
 	}
-	if m.IsFavorite {
+	if isFavorite {
 		t.Error("expected a second toggle to un-favorite the meal")
 	}
 }
 
-func TestStore_Create_SetsFavoriteAndLabels(t *testing.T) {
+// TestStore_ToggleFavoriteCategory_IsScopedPerCategory guards the entire
+// point of this feature: favoriting a meal for one category (e.g. Snack)
+// must not make it a favorite for a different category (e.g. Breakfast) too.
+func TestStore_ToggleFavoriteCategory_IsScopedPerCategory(t *testing.T) {
 	store, q := newTestStore(t)
 	ctx := t.Context()
 	userID := newTestUser(t, q)
+	categoryA, categoryB := twoCategories(t, store)
+
+	id, err := store.Create(ctx, userID, mealslib.MealInput{Name: "Granola Bar", ServingLabel: "per serving", ServingAmount: 1})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if _, err := store.ToggleFavoriteCategory(ctx, id, categoryA); err != nil {
+		t.Fatalf("toggle favorite for category A: %v", err)
+	}
+
+	favoritesA, err := store.ListFavorites(ctx, categoryA)
+	if err != nil {
+		t.Fatalf("list favorites for category A: %v", err)
+	}
+	if !containsMealID(favoritesA, id) {
+		t.Error("expected the meal to be a favorite for category A")
+	}
+
+	favoritesB, err := store.ListFavorites(ctx, categoryB)
+	if err != nil {
+		t.Fatalf("list favorites for category B: %v", err)
+	}
+	if containsMealID(favoritesB, id) {
+		t.Error("expected the meal to NOT be a favorite for category B, since it was only favorited for category A")
+	}
+}
+
+func TestStore_Create_SetsFavoriteCategoriesAndLabels(t *testing.T) {
+	store, q := newTestStore(t)
+	ctx := t.Context()
+	userID := newTestUser(t, q)
+	categoryA, _ := twoCategories(t, store)
 
 	label, err := store.CreateLabel(ctx, "quick", "blue")
 	if err != nil {
@@ -519,7 +570,7 @@ func TestStore_Create_SetsFavoriteAndLabels(t *testing.T) {
 
 	id, err := store.Create(ctx, userID, mealslib.MealInput{
 		Name: "Instant Oats", ServingLabel: "per serving", ServingAmount: 1,
-		IsFavorite: true, LabelIDs: []uuid.UUID{labelID},
+		FavoriteCategoryIDs: []uuid.UUID{categoryA}, LabelIDs: []uuid.UUID{labelID},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -529,8 +580,8 @@ func TestStore_Create_SetsFavoriteAndLabels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !meal.IsFavorite {
-		t.Error("expected IsFavorite=true to be persisted on create")
+	if len(meal.FavoriteCategories) != 1 || meal.FavoriteCategories[0].ID != categoryA {
+		t.Errorf("expected the meal to be favorited for category A, got %+v", meal.FavoriteCategories)
 	}
 	if len(meal.Labels) != 1 || meal.Labels[0].ID != labelID {
 		t.Errorf("expected the meal to carry the assigned label, got %+v", meal.Labels)

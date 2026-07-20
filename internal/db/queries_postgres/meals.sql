@@ -27,14 +27,14 @@ SELECT * FROM meals WHERE source = $1 AND source_ref = $2;
 SELECT * FROM meals WHERE source = 'manual' AND name = $1;
 
 -- name: CreateMeal :one
-INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, is_favorite)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: UpdateMeal :one
 UPDATE meals
-SET name = $1, recipe_url = $2, serving_label = $3, serving_amount = $4, is_favorite = $5, updated_at = now()
-WHERE id = $6
+SET name = $1, recipe_url = $2, serving_label = $3, serving_amount = $4, updated_at = now()
+WHERE id = $5
 RETURNING *;
 
 -- name: UpsertMealBySourceRef :one
@@ -66,13 +66,43 @@ ORDER BY nutrients.sort_order;
 -- name: ClearMealNutrientValues :exec
 DELETE FROM meal_nutrient_values WHERE meal_id = $1;
 
--- name: ToggleMealFavorite :one
--- A single atomic flip rather than read-then-write from the caller, so a
--- double-click (or two tabs) can't race into an inconsistent end state.
-UPDATE meals SET is_favorite = NOT is_favorite WHERE id = $1 RETURNING *;
+-- name: IsMealFavoriteForCategory :one
+SELECT EXISTS(
+    SELECT 1 FROM meal_favorite_categories WHERE meal_id = $1 AND category_id = $2
+);
 
--- name: ListFavoriteMeals :many
-SELECT * FROM meals WHERE is_favorite ORDER BY name;
+-- name: AddMealFavoriteCategory :exec
+INSERT INTO meal_favorite_categories (meal_id, category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveMealFavoriteCategory :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = $1 AND category_id = $2;
+
+-- name: ClearMealFavoriteCategories :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = $1;
+
+-- name: ListFavoriteMealsForCategory :many
+SELECT meals.*
+FROM meals
+JOIN meal_favorite_categories ON meal_favorite_categories.meal_id = meals.id
+WHERE meal_favorite_categories.category_id = $1
+ORDER BY meals.name;
+
+-- name: ListFavoriteCategoryIDsForMeal :many
+-- The favorited category ids for one meal - used to pre-check the edit
+-- form's category checkboxes.
+SELECT category_id FROM meal_favorite_categories WHERE meal_id = $1;
+
+-- name: ListFavoriteCategoriesForMeals :many
+-- Batched (not one query per meal) favorite-category lookup for a list of
+-- meals - the Meal Library list page's badges, fetched in one round trip
+-- regardless of how many meals are on the page.
+SELECT meal_favorite_categories.meal_id, meal_categories.id, meal_categories.name
+FROM meal_favorite_categories
+JOIN meal_categories ON meal_categories.id = meal_favorite_categories.category_id
+WHERE meal_favorite_categories.meal_id = ANY(sqlc.arg(meal_ids)::uuid[])
+ORDER BY meal_categories.sort_order, meal_categories.name;
 
 -- name: ListMealsByLabel :many
 SELECT meals.*

@@ -97,30 +97,30 @@ type NutrientValue struct {
 // Meal is a fully hydrated meal-library entry, including every known
 // nutrient (set or not) so templates can render a stable set of fields.
 type Meal struct {
-	ID             uuid.UUID
-	Name           string
-	Source         string
-	RecipeURL      string
-	ServingLabel   string
-	ServingAmount  float64
-	IsFavorite     bool
-	NutrientValues []NutrientValue
-	Labels         []Label
+	ID                 uuid.UUID
+	Name               string
+	Source             string
+	RecipeURL          string
+	ServingLabel       string
+	ServingAmount      float64
+	FavoriteCategories []FavoriteCategory
+	NutrientValues     []NutrientValue
+	Labels             []Label
 }
 
 // MealInput is what a create/update form submits. NutrientAmounts should
 // only contain nutrients the user actually filled in; Update clears and
 // re-sets every nutrient value from this map, so omitting a nutrient here
-// removes it from the meal. LabelIDs works the same way for labels: Update
-// replaces the full set from this slice.
+// removes it from the meal. LabelIDs/FavoriteCategoryIDs work the same way:
+// Update replaces the full set from each slice.
 type MealInput struct {
-	Name            string
-	RecipeURL       string
-	ServingLabel    string
-	ServingAmount   float64
-	IsFavorite      bool
-	NutrientAmounts map[int16]float64
-	LabelIDs        []uuid.UUID
+	Name                string
+	RecipeURL           string
+	ServingLabel        string
+	ServingAmount       float64
+	FavoriteCategoryIDs []uuid.UUID
+	NutrientAmounts     map[int16]float64
+	LabelIDs            []uuid.UUID
 }
 
 // Label is one meal label/tag — shared across the instance (like a meal
@@ -129,6 +129,24 @@ type Label struct {
 	ID    uuid.UUID
 	Name  string
 	Color string
+}
+
+// MealSearchResult is one row of the Day/Week/Default Day builders' "add
+// meal" search/favorites dropdown — IsFavorite reflects whether Meal is
+// currently favorited for the category being browsed, driving that row's
+// star toggle regardless of whether it came from the favorites branch
+// (always true there) or a text search (may be either).
+type MealSearchResult struct {
+	Meal       sqlc.Meal
+	IsFavorite bool
+}
+
+// FavoriteCategory is one meal category a meal has been marked a favorite
+// for — favorites are per-category, so starring a meal while browsing
+// Breakfast doesn't make it a quick-add under Snack too.
+type FavoriteCategory struct {
+	ID   uuid.UUID
+	Name string
 }
 
 // ListNutrients returns the full seeded nutrient registry, in display order.
@@ -281,20 +299,41 @@ func quoteFTS5(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-// ListFavorites returns every meal marked as a favorite, alphabetically —
-// shown as one-click "quick add" buttons on the Day/Week/Default Day builder
-// pages, in place of having to type a search for meals used constantly.
-func (s *Store) ListFavorites(ctx context.Context) ([]sqlc.Meal, error) {
-	return s.q.ListFavoriteMeals(ctx)
+// ListFavorites returns every meal marked as a favorite for categoryID,
+// alphabetically — shown as one-click "quick add" buttons on the Day/Default
+// Day builder pages, in place of having to type a search for meals used
+// constantly in that specific category.
+func (s *Store) ListFavorites(ctx context.Context, categoryID uuid.UUID) ([]sqlc.Meal, error) {
+	return s.q.ListFavoriteMealsForCategory(ctx, categoryID)
 }
 
-// ToggleFavorite flips a meal's favorite status and returns the updated row.
-func (s *Store) ToggleFavorite(ctx context.Context, id uuid.UUID) (sqlc.Meal, error) {
-	m, err := s.q.ToggleMealFavorite(ctx, id)
+// ToggleFavoriteCategory flips whether mealID is a favorite for categoryID
+// and reports the new state. A double-click (or two tabs) racing the
+// check-then-write below can't corrupt anything — both AddMealFavoriteCategory
+// and RemoveMealFavoriteCategory are idempotent no-ops if the row is already
+// in the target state — so this doesn't need a single atomic statement the
+// way the old boolean-column ToggleMealFavorite did.
+func (s *Store) ToggleFavoriteCategory(ctx context.Context, mealID, categoryID uuid.UUID) (bool, error) {
+	exists, err := s.q.IsMealFavoriteForCategory(ctx, sqlc.IsMealFavoriteForCategoryParams{
+		MealID: mealID, CategoryID: categoryID,
+	})
 	if err != nil {
-		return sqlc.Meal{}, fmt.Errorf("toggle meal favorite: %w", err)
+		return false, fmt.Errorf("check meal favorite category: %w", err)
 	}
-	return m, nil
+	if exists {
+		if err := s.q.RemoveMealFavoriteCategory(ctx, sqlc.RemoveMealFavoriteCategoryParams{
+			MealID: mealID, CategoryID: categoryID,
+		}); err != nil {
+			return false, fmt.Errorf("remove meal favorite category: %w", err)
+		}
+		return false, nil
+	}
+	if err := s.q.AddMealFavoriteCategory(ctx, sqlc.AddMealFavoriteCategoryParams{
+		MealID: mealID, CategoryID: categoryID,
+	}); err != nil {
+		return false, fmt.Errorf("add meal favorite category: %w", err)
+	}
+	return true, nil
 }
 
 // ListLabels returns every meal label, in display order.
@@ -361,6 +400,45 @@ func (s *Store) LabelsForMeals(ctx context.Context, mealsList []sqlc.Meal) (map[
 	return s.labelsForMeals(ctx, ids)
 }
 
+// favoriteCategoriesForMeals batch-fetches every category any of mealIDs is
+// favorited for, grouped by meal id — the same one-query-regardless-of-count
+// shape as labelsForMeals.
+func (s *Store) favoriteCategoriesForMeals(ctx context.Context, mealIDs []uuid.UUID) (map[uuid.UUID][]FavoriteCategory, error) {
+	if len(mealIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := s.q.ListFavoriteCategoriesForMeals(ctx, mealIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list favorite categories for meals: %w", err)
+	}
+	out := make(map[uuid.UUID][]FavoriteCategory, len(mealIDs))
+	for _, row := range rows {
+		out[row.MealID] = append(out[row.MealID], FavoriteCategory{ID: row.ID, Name: row.Name})
+	}
+	return out, nil
+}
+
+// FavoriteCategoriesForMeal returns the categories a single meal is
+// favorited for.
+func (s *Store) FavoriteCategoriesForMeal(ctx context.Context, mealID uuid.UUID) ([]FavoriteCategory, error) {
+	byMeal, err := s.favoriteCategoriesForMeals(ctx, []uuid.UUID{mealID})
+	if err != nil {
+		return nil, err
+	}
+	return byMeal[mealID], nil
+}
+
+// FavoriteCategoriesForMeals batch-fetches favorite categories for every
+// meal in mealsList — the Meal Library list page's badges, in one query
+// regardless of list length.
+func (s *Store) FavoriteCategoriesForMeals(ctx context.Context, mealsList []sqlc.Meal) (map[uuid.UUID][]FavoriteCategory, error) {
+	ids := make([]uuid.UUID, len(mealsList))
+	for i, m := range mealsList {
+		ids[i] = m.ID
+	}
+	return s.favoriteCategoriesForMeals(ctx, ids)
+}
+
 // NewMeal returns a blank Meal pre-populated with every known nutrient
 // (Amount nil), suitable for rendering an empty "create meal" form with the
 // same shape as an edited one.
@@ -413,16 +491,21 @@ func (s *Store) hydrate(ctx context.Context, m sqlc.Meal) (Meal, error) {
 		return Meal{}, err
 	}
 
+	favoriteCategories, err := s.FavoriteCategoriesForMeal(ctx, m.ID)
+	if err != nil {
+		return Meal{}, err
+	}
+
 	return Meal{
-		ID:             m.ID,
-		Name:           m.Name,
-		Source:         m.Source,
-		RecipeURL:      m.RecipeUrl.String,
-		ServingLabel:   m.ServingLabel,
-		ServingAmount:  m.ServingAmount,
-		IsFavorite:     m.IsFavorite,
-		NutrientValues: nvs,
-		Labels:         labels,
+		ID:                 m.ID,
+		Name:               m.Name,
+		Source:             m.Source,
+		RecipeURL:          m.RecipeUrl.String,
+		ServingLabel:       m.ServingLabel,
+		ServingAmount:      m.ServingAmount,
+		FavoriteCategories: favoriteCategories,
+		NutrientValues:     nvs,
+		Labels:             labels,
 	}, nil
 }
 
@@ -440,7 +523,6 @@ func (s *Store) Create(ctx context.Context, createdBy uuid.UUID, in MealInput) (
 			ServingLabel:  in.ServingLabel,
 			ServingAmount: in.ServingAmount,
 			CreatedBy:     uuid.NullUUID{UUID: createdBy, Valid: true},
-			IsFavorite:    in.IsFavorite,
 		})
 		if err != nil {
 			return fmt.Errorf("create meal: %w", err)
@@ -448,7 +530,10 @@ func (s *Store) Create(ctx context.Context, createdBy uuid.UUID, in MealInput) (
 		if err := setNutrientValues(ctx, q, meal.ID, in.NutrientAmounts); err != nil {
 			return err
 		}
-		return setLabels(ctx, q, meal.ID, in.LabelIDs)
+		if err := setLabels(ctx, q, meal.ID, in.LabelIDs); err != nil {
+			return err
+		}
+		return setFavoriteCategories(ctx, q, meal.ID, in.FavoriteCategoryIDs)
 	})
 	if err != nil {
 		return uuid.Nil, err
@@ -466,7 +551,6 @@ func (s *Store) Update(ctx context.Context, id uuid.UUID, in MealInput) error {
 			RecipeUrl:     sql.NullString{String: in.RecipeURL, Valid: in.RecipeURL != ""},
 			ServingLabel:  in.ServingLabel,
 			ServingAmount: in.ServingAmount,
-			IsFavorite:    in.IsFavorite,
 		}); err != nil {
 			return fmt.Errorf("update meal: %w", err)
 		}
@@ -476,7 +560,10 @@ func (s *Store) Update(ctx context.Context, id uuid.UUID, in MealInput) error {
 		if err := setNutrientValues(ctx, q, id, in.NutrientAmounts); err != nil {
 			return err
 		}
-		return setLabels(ctx, q, id, in.LabelIDs)
+		if err := setLabels(ctx, q, id, in.LabelIDs); err != nil {
+			return err
+		}
+		return setFavoriteCategories(ctx, q, id, in.FavoriteCategoryIDs)
 	})
 }
 
@@ -550,6 +637,22 @@ func setLabels(ctx context.Context, q sqlc.Querier, mealID uuid.UUID, labelIDs [
 			LabelID: labelID,
 		}); err != nil {
 			return fmt.Errorf("add label assignment: %w", err)
+		}
+	}
+	return nil
+}
+
+// setFavoriteCategories replaces mealID's full set of favorite-category
+// assignments with categoryIDs — same clear-then-add shape as setLabels.
+func setFavoriteCategories(ctx context.Context, q sqlc.Querier, mealID uuid.UUID, categoryIDs []uuid.UUID) error {
+	if err := q.ClearMealFavoriteCategories(ctx, mealID); err != nil {
+		return fmt.Errorf("clear favorite categories: %w", err)
+	}
+	for _, categoryID := range categoryIDs {
+		if err := q.AddMealFavoriteCategory(ctx, sqlc.AddMealFavoriteCategoryParams{
+			MealID: mealID, CategoryID: categoryID,
+		}); err != nil {
+			return fmt.Errorf("add favorite category: %w", err)
 		}
 	}
 	return nil

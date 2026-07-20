@@ -13,6 +13,22 @@ import (
 	"github.com/lib/pq"
 )
 
+const addMealFavoriteCategory = `-- name: AddMealFavoriteCategory :exec
+INSERT INTO meal_favorite_categories (meal_id, category_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddMealFavoriteCategoryParams struct {
+	MealID     uuid.UUID `json:"meal_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+func (q *Queries) AddMealFavoriteCategory(ctx context.Context, arg AddMealFavoriteCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, addMealFavoriteCategory, arg.MealID, arg.CategoryID)
+	return err
+}
+
 const addMealLabelAssignment = `-- name: AddMealLabelAssignment :exec
 INSERT INTO meal_label_assignments (meal_id, label_id)
 VALUES ($1, $2)
@@ -26,6 +42,15 @@ type AddMealLabelAssignmentParams struct {
 
 func (q *Queries) AddMealLabelAssignment(ctx context.Context, arg AddMealLabelAssignmentParams) error {
 	_, err := q.db.ExecContext(ctx, addMealLabelAssignment, arg.MealID, arg.LabelID)
+	return err
+}
+
+const clearMealFavoriteCategories = `-- name: ClearMealFavoriteCategories :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = $1
+`
+
+func (q *Queries) ClearMealFavoriteCategories(ctx context.Context, mealID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, clearMealFavoriteCategories, mealID)
 	return err
 }
 
@@ -48,9 +73,9 @@ func (q *Queries) ClearMealNutrientValues(ctx context.Context, mealID uuid.UUID)
 }
 
 const createMeal = `-- name: CreateMeal :one
-INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, is_favorite)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite
+INSERT INTO meals (id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at
 `
 
 type CreateMealParams struct {
@@ -62,7 +87,6 @@ type CreateMealParams struct {
 	ServingLabel  string         `json:"serving_label"`
 	ServingAmount float64        `json:"serving_amount"`
 	CreatedBy     uuid.NullUUID  `json:"created_by"`
-	IsFavorite    bool           `json:"is_favorite"`
 }
 
 func (q *Queries) CreateMeal(ctx context.Context, arg CreateMealParams) (Meal, error) {
@@ -75,7 +99,6 @@ func (q *Queries) CreateMeal(ctx context.Context, arg CreateMealParams) (Meal, e
 		arg.ServingLabel,
 		arg.ServingAmount,
 		arg.CreatedBy,
-		arg.IsFavorite,
 	)
 	var i Meal
 	err := row.Scan(
@@ -89,7 +112,6 @@ func (q *Queries) CreateMeal(ctx context.Context, arg CreateMealParams) (Meal, e
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }
@@ -143,7 +165,7 @@ func (q *Queries) DeleteMealLabel(ctx context.Context, id uuid.UUID) error {
 }
 
 const getManualMealByName = `-- name: GetManualMealByName :one
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite FROM meals WHERE source = 'manual' AND name = $1
+SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at FROM meals WHERE source = 'manual' AND name = $1
 `
 
 // Export/import's natural-key lookup for manually-entered meals, which have
@@ -163,13 +185,12 @@ func (q *Queries) GetManualMealByName(ctx context.Context, name string) (Meal, e
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }
 
 const getMeal = `-- name: GetMeal :one
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite FROM meals WHERE id = $1
+SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at FROM meals WHERE id = $1
 `
 
 func (q *Queries) GetMeal(ctx context.Context, id uuid.UUID) (Meal, error) {
@@ -186,13 +207,12 @@ func (q *Queries) GetMeal(ctx context.Context, id uuid.UUID) (Meal, error) {
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }
 
 const getMealBySourceRef = `-- name: GetMealBySourceRef :one
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite FROM meals WHERE source = $1 AND source_ref = $2
+SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at FROM meals WHERE source = $1 AND source_ref = $2
 `
 
 type GetMealBySourceRefParams struct {
@@ -214,7 +234,6 @@ func (q *Queries) GetMealBySourceRef(ctx context.Context, arg GetMealBySourceRef
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }
@@ -237,12 +256,103 @@ func (q *Queries) GetMealLabelByName(ctx context.Context, name string) (MealLabe
 	return i, err
 }
 
-const listFavoriteMeals = `-- name: ListFavoriteMeals :many
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite FROM meals WHERE is_favorite ORDER BY name
+const isMealFavoriteForCategory = `-- name: IsMealFavoriteForCategory :one
+SELECT EXISTS(
+    SELECT 1 FROM meal_favorite_categories WHERE meal_id = $1 AND category_id = $2
+)
 `
 
-func (q *Queries) ListFavoriteMeals(ctx context.Context) ([]Meal, error) {
-	rows, err := q.db.QueryContext(ctx, listFavoriteMeals)
+type IsMealFavoriteForCategoryParams struct {
+	MealID     uuid.UUID `json:"meal_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+func (q *Queries) IsMealFavoriteForCategory(ctx context.Context, arg IsMealFavoriteForCategoryParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isMealFavoriteForCategory, arg.MealID, arg.CategoryID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const listFavoriteCategoriesForMeals = `-- name: ListFavoriteCategoriesForMeals :many
+SELECT meal_favorite_categories.meal_id, meal_categories.id, meal_categories.name
+FROM meal_favorite_categories
+JOIN meal_categories ON meal_categories.id = meal_favorite_categories.category_id
+WHERE meal_favorite_categories.meal_id = ANY($1::uuid[])
+ORDER BY meal_categories.sort_order, meal_categories.name
+`
+
+type ListFavoriteCategoriesForMealsRow struct {
+	MealID uuid.UUID `json:"meal_id"`
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+}
+
+// Batched (not one query per meal) favorite-category lookup for a list of
+// meals - the Meal Library list page's badges, fetched in one round trip
+// regardless of how many meals are on the page.
+func (q *Queries) ListFavoriteCategoriesForMeals(ctx context.Context, mealIds []uuid.UUID) ([]ListFavoriteCategoriesForMealsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFavoriteCategoriesForMeals, pq.Array(mealIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFavoriteCategoriesForMealsRow{}
+	for rows.Next() {
+		var i ListFavoriteCategoriesForMealsRow
+		if err := rows.Scan(&i.MealID, &i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFavoriteCategoryIDsForMeal = `-- name: ListFavoriteCategoryIDsForMeal :many
+SELECT category_id FROM meal_favorite_categories WHERE meal_id = $1
+`
+
+// The favorited category ids for one meal - used to pre-check the edit
+// form's category checkboxes.
+func (q *Queries) ListFavoriteCategoryIDsForMeal(ctx context.Context, mealID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.QueryContext(ctx, listFavoriteCategoryIDsForMeal, mealID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []uuid.UUID{}
+	for rows.Next() {
+		var category_id uuid.UUID
+		if err := rows.Scan(&category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFavoriteMealsForCategory = `-- name: ListFavoriteMealsForCategory :many
+SELECT meals.id, meals.name, meals.source, meals.source_ref, meals.recipe_url, meals.serving_label, meals.serving_amount, meals.created_by, meals.created_at, meals.updated_at
+FROM meals
+JOIN meal_favorite_categories ON meal_favorite_categories.meal_id = meals.id
+WHERE meal_favorite_categories.category_id = $1
+ORDER BY meals.name
+`
+
+func (q *Queries) ListFavoriteMealsForCategory(ctx context.Context, categoryID uuid.UUID) ([]Meal, error) {
+	rows, err := q.db.QueryContext(ctx, listFavoriteMealsForCategory, categoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +371,6 @@ func (q *Queries) ListFavoriteMeals(ctx context.Context) ([]Meal, error) {
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -431,7 +540,7 @@ func (q *Queries) ListMealNutrientValues(ctx context.Context, mealID uuid.UUID) 
 }
 
 const listMeals = `-- name: ListMeals :many
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite FROM meals ORDER BY name LIMIT $1
+SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at FROM meals ORDER BY name LIMIT $1
 `
 
 func (q *Queries) ListMeals(ctx context.Context, limitCount int32) ([]Meal, error) {
@@ -454,7 +563,6 @@ func (q *Queries) ListMeals(ctx context.Context, limitCount int32) ([]Meal, erro
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -470,7 +578,7 @@ func (q *Queries) ListMeals(ctx context.Context, limitCount int32) ([]Meal, erro
 }
 
 const listMealsByLabel = `-- name: ListMealsByLabel :many
-SELECT meals.id, meals.name, meals.source, meals.source_ref, meals.recipe_url, meals.serving_label, meals.serving_amount, meals.created_by, meals.created_at, meals.updated_at, meals.is_favorite
+SELECT meals.id, meals.name, meals.source, meals.source_ref, meals.recipe_url, meals.serving_label, meals.serving_amount, meals.created_by, meals.created_at, meals.updated_at
 FROM meals
 JOIN meal_label_assignments ON meal_label_assignments.meal_id = meals.id
 WHERE meal_label_assignments.label_id = $1
@@ -503,7 +611,6 @@ func (q *Queries) ListMealsByLabel(ctx context.Context, arg ListMealsByLabelPara
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -518,8 +625,22 @@ func (q *Queries) ListMealsByLabel(ctx context.Context, arg ListMealsByLabelPara
 	return items, nil
 }
 
+const removeMealFavoriteCategory = `-- name: RemoveMealFavoriteCategory :exec
+DELETE FROM meal_favorite_categories WHERE meal_id = $1 AND category_id = $2
+`
+
+type RemoveMealFavoriteCategoryParams struct {
+	MealID     uuid.UUID `json:"meal_id"`
+	CategoryID uuid.UUID `json:"category_id"`
+}
+
+func (q *Queries) RemoveMealFavoriteCategory(ctx context.Context, arg RemoveMealFavoriteCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, removeMealFavoriteCategory, arg.MealID, arg.CategoryID)
+	return err
+}
+
 const searchMeals = `-- name: SearchMeals :many
-SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite
+SELECT id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at
 FROM meals
 WHERE word_similarity($1::text, name) > 0.3
 ORDER BY word_similarity($1::text, name) DESC
@@ -557,7 +678,6 @@ func (q *Queries) SearchMeals(ctx context.Context, arg SearchMealsParams) ([]Mea
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -573,7 +693,7 @@ func (q *Queries) SearchMeals(ctx context.Context, arg SearchMealsParams) ([]Mea
 }
 
 const searchMealsByLabel = `-- name: SearchMealsByLabel :many
-SELECT meals.id, meals.name, meals.source, meals.source_ref, meals.recipe_url, meals.serving_label, meals.serving_amount, meals.created_by, meals.created_at, meals.updated_at, meals.is_favorite
+SELECT meals.id, meals.name, meals.source, meals.source_ref, meals.recipe_url, meals.serving_label, meals.serving_amount, meals.created_by, meals.created_at, meals.updated_at
 FROM meals
 JOIN meal_label_assignments ON meal_label_assignments.meal_id = meals.id
 WHERE meal_label_assignments.label_id = $1
@@ -609,7 +729,6 @@ func (q *Queries) SearchMealsByLabel(ctx context.Context, arg SearchMealsByLabel
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsFavorite,
 		); err != nil {
 			return nil, err
 		}
@@ -641,36 +760,11 @@ func (q *Queries) SetMealNutrientValue(ctx context.Context, arg SetMealNutrientV
 	return err
 }
 
-const toggleMealFavorite = `-- name: ToggleMealFavorite :one
-UPDATE meals SET is_favorite = NOT is_favorite WHERE id = $1 RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite
-`
-
-// A single atomic flip rather than read-then-write from the caller, so a
-// double-click (or two tabs) can't race into an inconsistent end state.
-func (q *Queries) ToggleMealFavorite(ctx context.Context, id uuid.UUID) (Meal, error) {
-	row := q.db.QueryRowContext(ctx, toggleMealFavorite, id)
-	var i Meal
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Source,
-		&i.SourceRef,
-		&i.RecipeUrl,
-		&i.ServingLabel,
-		&i.ServingAmount,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.IsFavorite,
-	)
-	return i, err
-}
-
 const updateMeal = `-- name: UpdateMeal :one
 UPDATE meals
-SET name = $1, recipe_url = $2, serving_label = $3, serving_amount = $4, is_favorite = $5, updated_at = now()
-WHERE id = $6
-RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite
+SET name = $1, recipe_url = $2, serving_label = $3, serving_amount = $4, updated_at = now()
+WHERE id = $5
+RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at
 `
 
 type UpdateMealParams struct {
@@ -678,7 +772,6 @@ type UpdateMealParams struct {
 	RecipeUrl     sql.NullString `json:"recipe_url"`
 	ServingLabel  string         `json:"serving_label"`
 	ServingAmount float64        `json:"serving_amount"`
-	IsFavorite    bool           `json:"is_favorite"`
 	ID            uuid.UUID      `json:"id"`
 }
 
@@ -688,7 +781,6 @@ func (q *Queries) UpdateMeal(ctx context.Context, arg UpdateMealParams) (Meal, e
 		arg.RecipeUrl,
 		arg.ServingLabel,
 		arg.ServingAmount,
-		arg.IsFavorite,
 		arg.ID,
 	)
 	var i Meal
@@ -703,7 +795,6 @@ func (q *Queries) UpdateMeal(ctx context.Context, arg UpdateMealParams) (Meal, e
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }
@@ -737,7 +828,7 @@ ON CONFLICT (source, source_ref) WHERE source_ref IS NOT NULL
 DO UPDATE SET name = EXCLUDED.name, recipe_url = EXCLUDED.recipe_url,
               serving_label = EXCLUDED.serving_label, serving_amount = EXCLUDED.serving_amount,
               updated_at = now()
-RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at, is_favorite
+RETURNING id, name, source, source_ref, recipe_url, serving_label, serving_amount, created_by, created_at, updated_at
 `
 
 type UpsertMealBySourceRefParams struct {
@@ -776,7 +867,6 @@ func (q *Queries) UpsertMealBySourceRef(ctx context.Context, arg UpsertMealBySou
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IsFavorite,
 	)
 	return i, err
 }

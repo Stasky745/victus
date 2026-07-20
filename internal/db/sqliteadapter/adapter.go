@@ -59,8 +59,16 @@ func (a *Queries) AddDefaultDayItem(ctx context.Context, arg sqlc.AddDefaultDayI
 	return sqlc.DefaultDayItem(row), err
 }
 
+func (a *Queries) AddMealFavoriteCategory(ctx context.Context, arg sqlc.AddMealFavoriteCategoryParams) error {
+	return a.q.AddMealFavoriteCategory(ctx, sqlite.AddMealFavoriteCategoryParams(arg))
+}
+
 func (a *Queries) AddMealLabelAssignment(ctx context.Context, arg sqlc.AddMealLabelAssignmentParams) error {
 	return a.q.AddMealLabelAssignment(ctx, sqlite.AddMealLabelAssignmentParams(arg))
+}
+
+func (a *Queries) ClearMealFavoriteCategories(ctx context.Context, mealID uuid.UUID) error {
+	return a.q.ClearMealFavoriteCategories(ctx, mealID)
 }
 
 func (a *Queries) ClearMealLabelAssignments(ctx context.Context, mealID uuid.UUID) error {
@@ -160,6 +168,10 @@ func (a *Queries) GetMealCategoryByName(ctx context.Context, name string) (sqlc.
 	return sqlc.MealCategory(row), err
 }
 
+func (a *Queries) IsMealFavoriteForCategory(ctx context.Context, arg sqlc.IsMealFavoriteForCategoryParams) (bool, error) {
+	return a.q.IsMealFavoriteForCategory(ctx, sqlite.IsMealFavoriteForCategoryParams(arg))
+}
+
 func (a *Queries) GetMealLabelByName(ctx context.Context, name string) (sqlc.MealLabel, error) {
 	row, err := a.q.GetMealLabelByName(ctx, name)
 	return sqlc.MealLabel(row), err
@@ -219,8 +231,19 @@ func (a *Queries) ListDefaultDayItems(ctx context.Context, userID uuid.UUID) ([]
 	}), err
 }
 
-func (a *Queries) ListFavoriteMeals(ctx context.Context) ([]sqlc.Meal, error) {
-	rows, err := a.q.ListFavoriteMeals(ctx)
+func (a *Queries) ListFavoriteCategoriesForMeals(ctx context.Context, mealIds []uuid.UUID) ([]sqlc.ListFavoriteCategoriesForMealsRow, error) {
+	rows, err := a.q.ListFavoriteCategoriesForMeals(ctx, mealIds)
+	return convertSlice(rows, func(r sqlite.ListFavoriteCategoriesForMealsRow) sqlc.ListFavoriteCategoriesForMealsRow {
+		return sqlc.ListFavoriteCategoriesForMealsRow(r)
+	}), err
+}
+
+func (a *Queries) ListFavoriteCategoryIDsForMeal(ctx context.Context, mealID uuid.UUID) ([]uuid.UUID, error) {
+	return a.q.ListFavoriteCategoryIDsForMeal(ctx, mealID)
+}
+
+func (a *Queries) ListFavoriteMealsForCategory(ctx context.Context, categoryID uuid.UUID) ([]sqlc.Meal, error) {
+	rows, err := a.q.ListFavoriteMealsForCategory(ctx, categoryID)
 	return convertSlice(rows, func(r sqlite.Meal) sqlc.Meal { return sqlc.Meal(r) }), err
 }
 
@@ -302,9 +325,8 @@ func (a *Queries) SetUserNutrientGoal(ctx context.Context, arg sqlc.SetUserNutri
 	return a.q.SetUserNutrientGoal(ctx, sqlite.SetUserNutrientGoalParams(arg))
 }
 
-func (a *Queries) ToggleMealFavorite(ctx context.Context, id uuid.UUID) (sqlc.Meal, error) {
-	row, err := a.q.ToggleMealFavorite(ctx, id)
-	return sqlc.Meal(row), err
+func (a *Queries) RemoveMealFavoriteCategory(ctx context.Context, arg sqlc.RemoveMealFavoriteCategoryParams) error {
+	return a.q.RemoveMealFavoriteCategory(ctx, sqlite.RemoveMealFavoriteCategoryParams(arg))
 }
 
 func (a *Queries) UpdateDayPlanItemQuantity(ctx context.Context, arg sqlc.UpdateDayPlanItemQuantityParams) error {

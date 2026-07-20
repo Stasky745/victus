@@ -51,13 +51,17 @@ type Meal struct {
 	CreatedBy     uuid.NullUUID  `json:"created_by"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
-	IsFavorite    bool           `json:"is_favorite"`
 }
 
 type MealCategory struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
 	SortOrder int16     `json:"sort_order"`
+}
+
+type MealFavoriteCategory struct {
+	MealID     uuid.UUID `json:"meal_id"`
+	CategoryID uuid.UUID `json:"category_id"`
 }
 
 type MealLabel struct {

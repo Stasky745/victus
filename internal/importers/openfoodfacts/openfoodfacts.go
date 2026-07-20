@@ -77,6 +77,7 @@ type nutriments struct {
 	Fiber100g         *float64 `json:"fiber_100g"`
 	Sugars100g        *float64 `json:"sugars_100g"`
 	Sodium100g        *float64 `json:"sodium_100g"`      // grams
+	Salt100g          *float64 `json:"salt_100g"`        // grams
 	Cholesterol100g   *float64 `json:"cholesterol_100g"` // grams
 	Iron100g          *float64 `json:"iron_100g"`        // grams
 }
@@ -89,7 +90,7 @@ const gramsToMilligrams = 1000
 // zero — matching mealslib.MealInput.NutrientAmounts's "absent means
 // unset" contract.
 func (n nutriments) NutrientAmounts() map[string]float64 {
-	out := make(map[string]float64, 10)
+	out := make(map[string]float64, 11)
 	addGrams := func(key string, v *float64) {
 		if v != nil {
 			out[key] = *v
@@ -108,6 +109,7 @@ func (n nutriments) NutrientAmounts() map[string]float64 {
 	addGrams("fiber_g", n.Fiber100g)
 	addGrams("sugar_g", n.Sugars100g)
 	addMilligrams("sodium_mg", n.Sodium100g)
+	addGrams("salt_g", n.Salt100g)
 	addMilligrams("cholesterol_mg", n.Cholesterol100g)
 	addMilligrams("iron_mg", n.Iron100g)
 	return out

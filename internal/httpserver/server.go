@@ -208,6 +208,7 @@ func New(cfg *config.Config, sqlDB *sql.DB, oidcAuth *auth.Authenticator, opts .
 		r.Get("/", s.handleToday)
 		r.Get("/days/{date}", s.handleDayBuilder)
 		r.Get("/days/{date}/meal-search", s.handleDayMealSearch)
+		r.Post("/days/{date}/meal-search/{meal_id}/favorite", s.handleDayMealFavoriteToggle)
 		r.Post("/days/{date}/items", s.handleDayAddItem)
 		r.Patch("/days/{date}/items/{item_id}", s.handleDayUpdateItemQuantity)
 		r.Delete("/days/{date}/items/{item_id}", s.handleDayRemoveItem)
@@ -219,6 +220,7 @@ func New(cfg *config.Config, sqlDB *sql.DB, oidcAuth *auth.Authenticator, opts .
 
 		r.Get("/defaults", s.handleDefaultsPage)
 		r.Get("/defaults/meal-search", s.handleDefaultsMealSearch)
+		r.Post("/defaults/meal-search/{meal_id}/favorite", s.handleDefaultsMealFavoriteToggle)
 		r.Post("/defaults/items", s.handleDefaultsAddItem)
 		r.Delete("/defaults/items/{item_id}", s.handleDefaultsRemoveItem)
 
@@ -235,7 +237,6 @@ func New(cfg *config.Config, sqlDB *sql.DB, oidcAuth *auth.Authenticator, opts .
 		r.Post("/meals/labels/{id}/delete", s.handleLabelDelete)
 		r.Get("/meals/{id}/edit", s.handleMealEditForm)
 		r.Post("/meals/{id}", s.handleMealUpdate)
-		r.Post("/meals/{id}/favorite", s.handleMealToggleFavorite)
 		r.Delete("/meals/{id}", s.handleMealDelete)
 
 		r.Get("/meals/import", s.handleImportPage)

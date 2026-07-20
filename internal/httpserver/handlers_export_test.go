@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/Stasky745/victus/internal/db"
+	"github.com/Stasky745/victus/internal/dbtest"
 )
 
 // postFile is postForm's multipart-upload counterpart, for /settings/import.
@@ -37,13 +40,23 @@ func TestExportImport_HTTPRoundTrip(t *testing.T) {
 	srv, pool := newTestServerAndPool(t)
 	c := newAuthenticatedClient(t, pool, srv)
 
+	q, err := db.NewQuerier(dbtest.Driver(), pool)
+	if err != nil {
+		t.Fatalf("new querier: %v", err)
+	}
+	categories, err := q.ListMealCategories(t.Context())
+	if err != nil || len(categories) == 0 {
+		t.Fatalf("list categories: %v", err)
+	}
+	categoryID := categories[0].ID
+
 	createToken := c.csrfToken("/meals/new")
 	createRec := c.postForm("/meals", url.Values{
-		"name":           {"Export Test Meal"},
-		"serving_label":  {"per serving"},
-		"serving_amount": {"1"},
-		"is_favorite":    {"true"},
-		"nutrient_1":     {"400"},
+		"name":                  {"Export Test Meal"},
+		"serving_label":         {"per serving"},
+		"serving_amount":        {"1"},
+		"favorite_category_ids": {categoryID.String()},
+		"nutrient_1":            {"400"},
 	}, createToken)
 	if createRec.Code != http.StatusSeeOther {
 		t.Fatalf("create meal: status = %d, body = %s", createRec.Code, createRec.Body.String())

@@ -68,7 +68,7 @@ func TestExportImport_RoundTrip(t *testing.T) {
 	calID := nutrients[0].ID
 
 	meal, err := q.CreateMeal(ctx, sqlc.CreateMealParams{
-		ID: uuid.New(), Name: "Toast", Source: "manual", ServingLabel: "per serving", ServingAmount: 1, IsFavorite: true,
+		ID: uuid.New(), Name: "Toast", Source: "manual", ServingLabel: "per serving", ServingAmount: 1,
 	})
 	if err != nil {
 		t.Fatalf("create meal: %v", err)
@@ -78,6 +78,9 @@ func TestExportImport_RoundTrip(t *testing.T) {
 	}
 	if err := q.AddMealLabelAssignment(ctx, sqlc.AddMealLabelAssignmentParams{MealID: meal.ID, LabelID: label.ID}); err != nil {
 		t.Fatalf("add label assignment: %v", err)
+	}
+	if err := q.AddMealFavoriteCategory(ctx, sqlc.AddMealFavoriteCategoryParams{MealID: meal.ID, CategoryID: cat.ID}); err != nil {
+		t.Fatalf("add favorite category: %v", err)
 	}
 
 	minVal := 1300.0
@@ -107,11 +110,14 @@ func TestExportImport_RoundTrip(t *testing.T) {
 		t.Fatalf("expected exactly 1 exported meal, got %d", len(exported.Sections.Meals))
 	}
 	em := exported.Sections.Meals[0]
-	if em.Name != "Toast" || !em.IsFavorite || em.NutrientAmounts["calories"] != 250 {
+	if em.Name != "Toast" || em.NutrientAmounts["calories"] != 250 {
 		t.Errorf("unexpected exported meal: %+v", em)
 	}
 	if len(em.Labels) != 1 || em.Labels[0] != "quick" {
 		t.Errorf("expected exported meal to carry label %q, got %v", "quick", em.Labels)
+	}
+	if len(em.FavoriteCategories) != 1 || em.FavoriteCategories[0] != "Second Breakfast" {
+		t.Errorf("expected exported meal to be favorited for %q, got %v", "Second Breakfast", em.FavoriteCategories)
 	}
 
 	// --- Import into a *different* user on the same instance (simulating a
@@ -145,6 +151,20 @@ func TestExportImport_RoundTrip(t *testing.T) {
 	}
 	if len(otherGoals) != 1 || otherGoals[0].MinValue == nil || *otherGoals[0].MinValue != 1300 {
 		t.Errorf("expected other user to have the imported goal, got %+v", otherGoals)
+	}
+
+	// The favorite-category assignment (a shared/global property of the meal
+	// library, not per-user) must have survived the round trip too.
+	importedMeal, err := q.GetManualMealByName(ctx, "Toast")
+	if err != nil {
+		t.Fatalf("get imported meal: %v", err)
+	}
+	favoriteCategoryIDs, err := q.ListFavoriteCategoryIDsForMeal(ctx, importedMeal.ID)
+	if err != nil {
+		t.Fatalf("list favorite categories for imported meal: %v", err)
+	}
+	if len(favoriteCategoryIDs) != 1 || favoriteCategoryIDs[0] != cat.ID {
+		t.Errorf("expected the imported meal to be favorited for %q, got %v", cat.ID, favoriteCategoryIDs)
 	}
 }
 

@@ -3,6 +3,7 @@ package week
 import (
 	"github.com/Stasky745/victus/internal/db/sqlc"
 	"github.com/Stasky745/victus/internal/goals"
+	"github.com/Stasky745/victus/internal/mealslib"
 	"github.com/Stasky745/victus/internal/planning"
 	"github.com/Stasky745/victus/web/templates/day"
 	"github.com/Stasky745/victus/web/templates/layout"
@@ -149,19 +150,19 @@ templ dayRow(csrfToken string, weekStart string, d planning.Day, allDays []plann
 // Builder's fragment-swap scaffolding to hook into; a plain form submit is
 // simpler and handleDayAddItem already redirects back to the week view for
 // non-htmx requests.
-templ SearchResults(dateStr string, csrfToken string, categoryID string, results []sqlc.Meal) {
+templ SearchResults(dateStr string, csrfToken string, categoryID string, results []mealslib.MealSearchResult) {
 	if len(results) == 0 {
 		<p class="px-2 py-1 text-xs text-slate-400 dark:text-vxmuted">No matching meals.</p>
 	} else {
 		<ul class="vx-list">
-			for _, m := range results {
+			for _, item := range results {
 				<li>
 					<form method="POST" action={ templ.URL("/days/" + dateStr + "/items") }>
 						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
-						<input type="hidden" name="meal_id" value={ idString(m.ID) }/>
+						<input type="hidden" name="meal_id" value={ idString(item.Meal.ID) }/>
 						<input type="hidden" name="category_id" value={ categoryID }/>
 						<button type="submit" class="flex w-full items-center justify-between gap-2 px-2 py-1 text-left hover:bg-slate-50 dark:hover:bg-vxborder">
-							<span class="truncate text-xs">{ m.Name }</span>
+							<span class="truncate text-xs">{ item.Meal.Name }</span>
 							<span class="vx-link-accent shrink-0 text-xs">Add</span>
 						</button>
 					</form>

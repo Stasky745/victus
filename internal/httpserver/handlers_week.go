@@ -80,7 +80,7 @@ func (s *Server) handleWeekMealSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.searchMealsForBuilder(r.Context(), r.URL.Query().Get("q"))
+	results, err := s.searchMealsForBuilder(r.Context(), categoryID, r.URL.Query().Get("q"))
 	if err != nil {
 		httperr.Internal(w, r, "failed to search meals for week builder", err)
 		return

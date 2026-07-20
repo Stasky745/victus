@@ -23,12 +23,12 @@ func (s *Server) handleDefaultsPage(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to load default day", err)
 		return
 	}
-	favorites, err := s.meals.ListFavorites(r.Context())
+	favoritesByCategory, err := s.favoritesByCategory(r.Context(), sections)
 	if err != nil {
 		httperr.Internal(w, r, "failed to load favorite meals", err)
 		return
 	}
-	if err := defaults.Page(csrf.Token(r), sections, favorites).Render(r.Context(), w); err != nil {
+	if err := defaults.Page(csrf.Token(r), sections, favoritesByCategory).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render default day page", "error", err)
 	}
 }
@@ -39,12 +39,42 @@ func (s *Server) handleDefaultsMealSearch(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid category id", http.StatusBadRequest)
 		return
 	}
-	results, err := s.searchMealsForBuilder(r.Context(), r.URL.Query().Get("q"))
+	s.renderDefaultsMealSearchBox(w, r, categoryID, r.URL.Query().Get("q"))
+}
+
+// handleDefaultsMealFavoriteToggle mirrors handleDayMealFavoriteToggle for
+// the Default Day builder's quick-add dropdown.
+func (s *Server) handleDefaultsMealFavoriteToggle(w http.ResponseWriter, r *http.Request) {
+	mealID, err := uuid.Parse(chi.URLParam(r, "meal_id"))
+	if err != nil {
+		http.Error(w, "invalid meal id", http.StatusBadRequest)
+		return
+	}
+	categoryID, err := uuid.Parse(r.URL.Query().Get("category_id"))
+	if err != nil {
+		http.Error(w, "invalid category id", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := s.meals.ToggleFavoriteCategory(r.Context(), mealID, categoryID); err != nil {
+		if dberr.IsForeignKeyViolation(err) {
+			http.Error(w, "that meal or category no longer exists", http.StatusBadRequest)
+			return
+		}
+		httperr.Internal(w, r, "failed to toggle meal favorite category", err, "meal_id", mealID, "category_id", categoryID)
+		return
+	}
+
+	s.renderDefaultsMealSearchBox(w, r, categoryID, r.URL.Query().Get("q"))
+}
+
+func (s *Server) renderDefaultsMealSearchBox(w http.ResponseWriter, r *http.Request, categoryID uuid.UUID, q string) {
+	results, err := s.searchMealsForBuilder(r.Context(), categoryID, q)
 	if err != nil {
 		httperr.Internal(w, r, "failed to search meals for default day", err)
 		return
 	}
-	if err := defaults.SearchResults(categoryID.String(), results).Render(r.Context(), w); err != nil {
+	if err := defaults.SearchResults(categoryID.String(), q, results).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render default day search results", "error", err)
 	}
 }
@@ -119,7 +149,7 @@ func (s *Server) renderDefaultsCategory(w http.ResponseWriter, r *http.Request, 
 		slog.ErrorContext(r.Context(), "failed to render default day category items", "error", err)
 		return
 	}
-	favorites, err := s.meals.ListFavorites(r.Context())
+	favorites, err := s.searchMealsForBuilder(r.Context(), categoryID, "")
 	if err != nil {
 		httperr.Internal(w, r, "failed to load favorite meals", err)
 		return

@@ -5,8 +5,12 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/Stasky745/victus/internal/db"
+	"github.com/Stasky745/victus/internal/dbtest"
 )
 
 func TestMeals_CreateEditDeleteFlow(t *testing.T) {
@@ -333,42 +337,78 @@ func extractCategoryID(t *testing.T, body, name string) string {
 	return rest[:end]
 }
 
-func TestMeals_ToggleFavorite(t *testing.T) {
+// TestMeals_FavoriteCategories_ScopedPerCategory guards the whole point of
+// this feature: favoriting a meal for one category must not make it a
+// favorite for a different one, and editing the meal to change which
+// categories it's favorited for must actually take effect (add and remove).
+func TestMeals_FavoriteCategories_ScopedPerCategory(t *testing.T) {
 	srv, pool := newTestServerAndPool(t)
 	c := newAuthenticatedClient(t, pool, srv)
+
+	q, err := db.NewQuerier(dbtest.Driver(), pool)
+	if err != nil {
+		t.Fatalf("new querier: %v", err)
+	}
+	categories, err := q.ListMealCategories(t.Context())
+	if err != nil || len(categories) < 2 {
+		t.Fatalf("list categories: %v", err)
+	}
+	categoryA, categoryB := categories[0], categories[1]
+	today := time.Now().Format("2006-01-02")
 
 	token := c.csrfToken("/meals/new")
 	createRec := c.postForm("/meals", url.Values{
 		"name": {"Star Meal"}, "serving_label": {"per serving"}, "serving_amount": {"1"},
+		"favorite_category_ids": {categoryA.ID.String()},
 	}, token)
 	if createRec.Code != http.StatusSeeOther {
 		t.Fatalf("create: status = %d", createRec.Code)
 	}
 	id := extractMealID(t, c.get("/meals").Body.String(), "Star Meal")
 
-	favToken := c.csrfToken("/meals")
-	firstToggle := c.postFormHX("/meals/"+id+"/favorite", url.Values{}, favToken)
-	if firstToggle.Code != http.StatusOK {
-		t.Fatalf("first toggle: status = %d, body: %s", firstToggle.Code, firstToggle.Body.String())
-	}
-	if !strings.Contains(firstToggle.Body.String(), "★") {
-		t.Errorf("expected the filled star after favoriting, got: %s", firstToggle.Body.String())
+	listBody := c.get("/meals").Body.String()
+	if !strings.Contains(listBody, "★ "+categoryA.Name) {
+		t.Errorf("expected the meal list to show a favorite badge for %q, got: %s", categoryA.Name, listBody)
 	}
 
-	// Favorited meals show up as one-click quick-add on the Day Builder.
-	dayPage := c.get("/")
-	loc := dayPage.Header().Get("Location")
-	dayBody := c.get(loc).Body.String()
-	if !strings.Contains(dayBody, "Star Meal") {
-		t.Errorf("expected the favorited meal to appear as a quick-add on the day page, got: %s", dayBody)
+	// Favorited for A: shows up as a quick-add under A's empty-query search...
+	searchA := c.get("/days/" + today + "/meal-search?category_id=" + categoryA.ID.String())
+	if !strings.Contains(searchA.Body.String(), "Star Meal") {
+		t.Errorf("expected the meal favorited for %q to be a quick-add there, got: %s", categoryA.Name, searchA.Body.String())
+	}
+	// ...but not under B's — favorites are scoped per category, not global.
+	searchB := c.get("/days/" + today + "/meal-search?category_id=" + categoryB.ID.String())
+	if strings.Contains(searchB.Body.String(), "Star Meal") {
+		t.Errorf("expected the meal favorited only for %q to NOT be a quick-add under %q, got: %s", categoryA.Name, categoryB.Name, searchB.Body.String())
 	}
 
-	secondToggle := c.postFormHX("/meals/"+id+"/favorite", url.Values{}, favToken)
-	if secondToggle.Code != http.StatusOK {
-		t.Fatalf("second toggle: status = %d", secondToggle.Code)
+	// The star toggle inside the search dropdown itself must work too.
+	favToken := c.csrfToken("/days/" + today)
+	toggleRec := c.postFormHX("/days/"+today+"/meal-search/"+id+"/favorite?category_id="+categoryB.ID.String(), url.Values{}, favToken)
+	if toggleRec.Code != http.StatusOK {
+		t.Fatalf("toggle favorite for category B: status = %d, body: %s", toggleRec.Code, toggleRec.Body.String())
 	}
-	if strings.Contains(secondToggle.Body.String(), "★") {
-		t.Errorf("expected the outline star after un-favoriting, got: %s", secondToggle.Body.String())
+	if !strings.Contains(toggleRec.Body.String(), "Star Meal") {
+		t.Errorf("expected the meal to appear as a favorite for %q right after toggling, got: %s", categoryB.Name, toggleRec.Body.String())
+	}
+
+	// Editing the meal to drop A entirely must remove both the badge and the
+	// quick-add — Update replaces the full set, it doesn't merge.
+	editToken := c.csrfToken("/meals/" + id + "/edit")
+	updateRec := c.postForm("/meals/"+id, url.Values{
+		"name": {"Star Meal"}, "serving_label": {"per serving"}, "serving_amount": {"1"},
+		"favorite_category_ids": {categoryB.ID.String()},
+	}, editToken)
+	if updateRec.Code != http.StatusSeeOther {
+		t.Fatalf("update: status = %d", updateRec.Code)
+	}
+
+	listBodyAfter := c.get("/meals").Body.String()
+	if strings.Contains(listBodyAfter, "★ "+categoryA.Name) {
+		t.Errorf("expected the favorite badge for %q to be gone after editing it away, got: %s", categoryA.Name, listBodyAfter)
+	}
+	if !strings.Contains(listBodyAfter, "★ "+categoryB.Name) {
+		t.Errorf("expected a favorite badge for %q after the edit, got: %s", categoryB.Name, listBodyAfter)
 	}
 }
 

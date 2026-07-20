@@ -15,6 +15,7 @@ import (
 	"github.com/Stasky745/victus/internal/db/sqlc"
 	"github.com/Stasky745/victus/internal/dberr"
 	"github.com/Stasky745/victus/internal/httperr"
+	"github.com/Stasky745/victus/internal/mealslib"
 	"github.com/Stasky745/victus/internal/planning"
 	"github.com/Stasky745/victus/web/templates/day"
 )
@@ -46,7 +47,7 @@ func (s *Server) handleDayBuilder(w http.ResponseWriter, r *http.Request) {
 		httperr.Internal(w, r, "failed to load nutrient goals", err, "date", date)
 		return
 	}
-	favorites, err := s.meals.ListFavorites(r.Context())
+	favoritesByCategory, err := s.favoritesByCategory(r.Context(), d.Categories)
 	if err != nil {
 		httperr.Internal(w, r, "failed to load favorite meals", err, "date", date)
 		return
@@ -54,9 +55,25 @@ func (s *Server) handleDayBuilder(w http.ResponseWriter, r *http.Request) {
 
 	prev := day.FormatDate(date.AddDate(0, 0, -1))
 	next := day.FormatDate(date.AddDate(0, 0, 1))
-	if err := day.Page(csrf.Token(r), d, prev, next, goalsList, favorites).Render(r.Context(), w); err != nil {
+	if err := day.Page(csrf.Token(r), d, prev, next, goalsList, favoritesByCategory).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render day builder", "error", err)
 	}
+}
+
+// favoritesByCategory builds each category's favorites-view search results
+// (one query per category — these tables are tiny, same assumption already
+// made for categories/labels elsewhere in this package), for Page's initial
+// pre-search dropdown state.
+func (s *Server) favoritesByCategory(ctx context.Context, sections []planning.CategorySection) (map[uuid.UUID][]mealslib.MealSearchResult, error) {
+	out := make(map[uuid.UUID][]mealslib.MealSearchResult, len(sections))
+	for _, section := range sections {
+		results, err := s.searchMealsForBuilder(ctx, section.Category.ID, "")
+		if err != nil {
+			return nil, err
+		}
+		out[section.Category.ID] = results
+	}
+	return out, nil
 }
 
 func (s *Server) handleDayMealSearch(w http.ResponseWriter, r *http.Request) {
@@ -71,29 +88,94 @@ func (s *Server) handleDayMealSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.searchMealsForBuilder(r.Context(), r.URL.Query().Get("q"))
+	s.renderDayMealSearchBox(w, r, dateStr, categoryID, r.URL.Query().Get("q"))
+}
+
+// handleDayMealFavoriteToggle flips whether a meal is a favorite for the
+// category currently being browsed, then re-renders exactly what
+// handleDayMealSearch would for the same query — the star toggle lives
+// inside that same dropdown, so toggling it needs to refresh in place.
+func (s *Server) handleDayMealFavoriteToggle(w http.ResponseWriter, r *http.Request) {
+	dateStr := chi.URLParam(r, "date")
+	if _, err := time.Parse(day.DateLayout, dateStr); err != nil {
+		http.Error(w, "invalid date", http.StatusBadRequest)
+		return
+	}
+	mealID, err := uuid.Parse(chi.URLParam(r, "meal_id"))
+	if err != nil {
+		http.Error(w, "invalid meal id", http.StatusBadRequest)
+		return
+	}
+	categoryID, err := uuid.Parse(r.URL.Query().Get("category_id"))
+	if err != nil {
+		http.Error(w, "invalid category id", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := s.meals.ToggleFavoriteCategory(r.Context(), mealID, categoryID); err != nil {
+		if dberr.IsForeignKeyViolation(err) {
+			http.Error(w, "that meal or category no longer exists", http.StatusBadRequest)
+			return
+		}
+		httperr.Internal(w, r, "failed to toggle meal favorite category", err, "meal_id", mealID, "category_id", categoryID)
+		return
+	}
+
+	s.renderDayMealSearchBox(w, r, dateStr, categoryID, r.URL.Query().Get("q"))
+}
+
+// renderDayMealSearchBox renders the "add meal" dropdown for categoryID —
+// favorites when q is empty, matching results otherwise — shared by the
+// search box itself and the in-dropdown favorite-star toggle, so both
+// always end up showing the exact same view.
+func (s *Server) renderDayMealSearchBox(w http.ResponseWriter, r *http.Request, dateStr string, categoryID uuid.UUID, q string) {
+	results, err := s.searchMealsForBuilder(r.Context(), categoryID, q)
 	if err != nil {
 		httperr.Internal(w, r, "failed to search meals for day builder", err)
 		return
 	}
-
 	// Render the canonical (uuid.Parse'd) form, not the raw query string —
 	// uuid.Parse accepts non-canonical encodings (urn:uuid: prefix, braces,
 	// undashed hex) that would otherwise survive into the hx-target/hx-vals
 	// this fragment builds, producing an id htmx can never match.
-	if err := day.SearchResults(dateStr, categoryID.String(), results).Render(r.Context(), w); err != nil {
+	if err := day.SearchResults(dateStr, categoryID.String(), q, results).Render(r.Context(), w); err != nil {
 		slog.ErrorContext(r.Context(), "failed to render day meal search results", "error", err)
 	}
 }
 
-// searchMealsForBuilder is the meal-search behavior shared by the Day and
-// Week Builders' "add meal" search boxes: an empty query lists everything
-// (browsing), a non-empty one searches by name.
-func (s *Server) searchMealsForBuilder(ctx context.Context, q string) ([]sqlc.Meal, error) {
-	if q == "" {
-		return s.meals.List(ctx)
+// searchMealsForBuilder is the meal-search behavior shared by the Day,
+// Week, and Default Day Builders' "add meal" search boxes: an empty query
+// shows categoryID's favorites (quick-add for meals used constantly in that
+// category), a non-empty one searches by name across the whole library.
+// Every result carries whether it's currently a favorite for categoryID, so
+// callers can render a star toggle next to it regardless of which branch
+// produced it.
+func (s *Server) searchMealsForBuilder(ctx context.Context, categoryID uuid.UUID, q string) ([]mealslib.MealSearchResult, error) {
+	favorites, err := s.meals.ListFavorites(ctx, categoryID)
+	if err != nil {
+		return nil, err
 	}
-	return s.meals.Search(ctx, q, defaultSearchLimit)
+	favoriteIDs := make(map[uuid.UUID]bool, len(favorites))
+	for _, m := range favorites {
+		favoriteIDs[m.ID] = true
+	}
+
+	if q == "" {
+		return toSearchResults(favorites, favoriteIDs), nil
+	}
+	results, err := s.meals.Search(ctx, q, defaultSearchLimit)
+	if err != nil {
+		return nil, err
+	}
+	return toSearchResults(results, favoriteIDs), nil
+}
+
+func toSearchResults(meals []sqlc.Meal, favoriteIDs map[uuid.UUID]bool) []mealslib.MealSearchResult {
+	out := make([]mealslib.MealSearchResult, len(meals))
+	for i, m := range meals {
+		out[i] = mealslib.MealSearchResult{Meal: m, IsFavorite: favoriteIDs[m.ID]}
+	}
+	return out
 }
 
 func (s *Server) handleDayAddItem(w http.ResponseWriter, r *http.Request) {
@@ -249,7 +331,7 @@ func (s *Server) renderCategoryAndSummary(w http.ResponseWriter, r *http.Request
 	// its favorites quick-add state — left alone, the just-added meal's Add
 	// button stays visible and clickable, and a second click would insert a
 	// duplicate item.
-	favorites, err := s.meals.ListFavorites(r.Context())
+	favorites, err := s.searchMealsForBuilder(r.Context(), categoryID, "")
 	if err != nil {
 		httperr.Internal(w, r, "failed to load favorite meals", err)
 		return

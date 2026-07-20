@@ -38,6 +38,17 @@ func hasLabel(labels []mealslib.Label, id uuid.UUID) bool {
 	return false
 }
 
+// hasFavoriteCategory reports whether id is present in categories — used to
+// pre-check the meal form's favorite-category checkboxes.
+func hasFavoriteCategory(categories []mealslib.FavoriteCategory, id uuid.UUID) bool {
+	for _, c := range categories {
+		if c.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // labelIDValue renders the active label filter for the hidden form field
 // the search box includes — blank (not "00000000-...") when there's no
 // active filter, so the query param is simply absent rather than an

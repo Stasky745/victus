@@ -1,13 +1,15 @@
 package day
 
 import (
-	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/google/uuid"
+
 	"github.com/Stasky745/victus/internal/goals"
+	"github.com/Stasky745/victus/internal/mealslib"
 	"github.com/Stasky745/victus/internal/planning"
 	"github.com/Stasky745/victus/web/templates/layout"
 )
 
-templ Page(csrfToken string, d planning.Day, prevDate, nextDate string, goalsList []goals.Goal, favorites []sqlc.Meal) {
+templ Page(csrfToken string, d planning.Day, prevDate, nextDate string, goalsList []goals.Goal, favoritesByCategory map[uuid.UUID][]mealslib.MealSearchResult) {
 	@layout.Base("Day Builder", csrfToken) {
 		<div class="mb-4 flex items-center justify-between">
 			<h1 class="text-lg font-semibold">{ FormatDate(d.Date) }</h1>
@@ -27,6 +29,7 @@ templ Page(csrfToken string, d planning.Day, prevDate, nextDate string, goalsLis
 					@CategoryItems(FormatDate(d.Date), section)
 					<div class="mt-2">
 						<input
+							id={ "search-input-" + idString(section.Category.ID) }
 							type="search"
 							placeholder={ "Add to " + section.Category.Name + "…" }
 							class="vx-input mt-0"
@@ -36,10 +39,11 @@ templ Page(csrfToken string, d planning.Day, prevDate, nextDate string, goalsLis
 							hx-swap="innerHTML"
 							name="q"
 						/>
-						<!-- Pre-populated with favorites (not empty) so the most-used
-						     meals are a single click away without typing a search. -->
+						<!-- Pre-populated with this category's favorites (not empty) so
+						     the most-used meals are a single click away without typing
+						     a search. -->
 						<div id={ "search-results-" + idString(section.Category.ID) } class="mt-1">
-							@FavoritesOrHint(FormatDate(d.Date), idString(section.Category.ID), favorites)
+							@SearchResults(FormatDate(d.Date), idString(section.Category.ID), "", favoritesByCategory[section.Category.ID])
 						</div>
 					</div>
 				</section>
@@ -109,44 +113,56 @@ templ CategoryItems(dateStr string, section planning.CategorySection) {
 // just-added meal's "Add" button stays visible and clickable, and a second
 // click would insert a duplicate item (AddItem has no dedup guard, since
 // re-adding the same meal deliberately IS allowed as a distinct entry).
-templ ResetSearchResults(dateStr string, categoryID string, favorites []sqlc.Meal) {
+templ ResetSearchResults(dateStr string, categoryID string, favorites []mealslib.MealSearchResult) {
 	<div id={ "search-results-" + categoryID } hx-swap-oob="true" class="mt-1">
-		@FavoritesOrHint(dateStr, categoryID, favorites)
+		@SearchResults(dateStr, categoryID, "", favorites)
 	</div>
 }
 
-// FavoritesOrHint is the search box's pre-search / post-add state: favorite
-// meals as one-click Add buttons, or a hint pointing at how to get some.
-templ FavoritesOrHint(dateStr string, categoryID string, favorites []sqlc.Meal) {
-	if len(favorites) == 0 {
-		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">Search above, or star meals in the Meal Library for one-click add here.</p>
-	} else {
-		@mealAddButtons(dateStr, categoryID, favorites)
-	}
-}
-
-templ SearchResults(dateStr string, categoryID string, results []sqlc.Meal) {
+// SearchResults is the search box's dropdown for every state: this
+// category's favorites (q empty), matching results (q non-empty), or a
+// hint/empty message for either case with nothing to show.
+templ SearchResults(dateStr string, categoryID string, q string, results []mealslib.MealSearchResult) {
 	if len(results) == 0 {
-		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching meals.</p>
+		if q == "" {
+			<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">Search above, or star a meal below to make it a one-click add here.</p>
+		} else {
+			<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching meals.</p>
+		}
 	} else {
 		@mealAddButtons(dateStr, categoryID, results)
 	}
 }
 
-templ mealAddButtons(dateStr string, categoryID string, results []sqlc.Meal) {
+templ mealAddButtons(dateStr string, categoryID string, results []mealslib.MealSearchResult) {
 	<ul class="vx-list">
-		for _, m := range results {
-			<li>
+		for _, item := range results {
+			<li class="flex items-center justify-between gap-1 px-1">
 				<button
 					type="button"
 					hx-post={ "/days/" + dateStr + "/items" }
-					hx-vals={ layout.JSONAttr(map[string]string{"meal_id": idString(m.ID), "category_id": categoryID}) }
+					hx-vals={ layout.JSONAttr(map[string]string{"meal_id": idString(item.Meal.ID), "category_id": categoryID}) }
 					hx-target={ "#category-" + categoryID + "-items" }
 					hx-swap="outerHTML"
-					class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-vxborder"
+					class="flex flex-1 items-center justify-between gap-3 px-2 py-2 text-left hover:bg-slate-50 dark:hover:bg-vxborder"
 				>
-					<span class="text-sm">{ m.Name }</span>
+					<span class="text-sm">{ item.Meal.Name }</span>
 					<span class="vx-link-accent text-xs">Add</span>
+				</button>
+				<button
+					type="button"
+					hx-post={ "/days/" + dateStr + "/meal-search/" + idString(item.Meal.ID) + "/favorite?category_id=" + categoryID }
+					hx-include={ "#search-input-" + categoryID }
+					hx-target={ "#search-results-" + categoryID }
+					hx-swap="innerHTML"
+					aria-label="Toggle favorite for this category"
+					class={ "px-2 text-sm", templ.KV("text-amber-500", item.IsFavorite), templ.KV("text-slate-300 dark:text-vxborder", !item.IsFavorite) }
+				>
+					if item.IsFavorite {
+						★
+					} else {
+						☆
+					}
 				</button>
 			</li>
 		}

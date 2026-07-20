@@ -17,7 +17,9 @@ type Querier interface {
 	// adds (the common case) always get a distinct, increasing sort_order.
 	AddDayPlanItem(ctx context.Context, arg AddDayPlanItemParams) (DayPlanItem, error)
 	AddDefaultDayItem(ctx context.Context, arg AddDefaultDayItemParams) (DefaultDayItem, error)
+	AddMealFavoriteCategory(ctx context.Context, arg AddMealFavoriteCategoryParams) error
 	AddMealLabelAssignment(ctx context.Context, arg AddMealLabelAssignmentParams) error
+	ClearMealFavoriteCategories(ctx context.Context, mealID uuid.UUID) error
 	ClearMealLabelAssignments(ctx context.Context, mealID uuid.UUID) error
 	ClearMealNutrientValues(ctx context.Context, mealID uuid.UUID) error
 	CreateMeal(ctx context.Context, arg CreateMealParams) (Meal, error)
@@ -57,6 +59,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByOIDCSubject(ctx context.Context, oidcSubject sql.NullString) (User, error)
 	GetUserNutrientGoals(ctx context.Context, userID uuid.UUID) ([]GetUserNutrientGoalsRow, error)
+	IsMealFavoriteForCategory(ctx context.Context, arg IsMealFavoriteForCategoryParams) (bool, error)
 	ListAppSettings(ctx context.Context) ([]AppSetting, error)
 	// Ordered by id as a final tiebreaker (not just category/item sort_order) so
 	// that two items which happen to land on the same sort_order — e.g. from a
@@ -65,7 +68,14 @@ type Querier interface {
 	ListDayPlanItems(ctx context.Context, dayPlanID uuid.UUID) ([]ListDayPlanItemsRow, error)
 	ListDayPlansInRange(ctx context.Context, arg ListDayPlansInRangeParams) ([]DayPlan, error)
 	ListDefaultDayItems(ctx context.Context, userID uuid.UUID) ([]ListDefaultDayItemsRow, error)
-	ListFavoriteMeals(ctx context.Context) ([]Meal, error)
+	// Batched (not one query per meal) favorite-category lookup for a list of
+	// meals - the Meal Library list page's badges, fetched in one round trip
+	// regardless of how many meals are on the page.
+	ListFavoriteCategoriesForMeals(ctx context.Context, mealIds []uuid.UUID) ([]ListFavoriteCategoriesForMealsRow, error)
+	// The favorited category ids for one meal - used to pre-check the edit
+	// form's category checkboxes.
+	ListFavoriteCategoryIDsForMeal(ctx context.Context, mealID uuid.UUID) ([]uuid.UUID, error)
+	ListFavoriteMealsForCategory(ctx context.Context, categoryID uuid.UUID) ([]Meal, error)
 	ListMealCategories(ctx context.Context) ([]MealCategory, error)
 	// The assigned label ids for one meal — used to pre-check the edit form's
 	// label checkboxes.
@@ -82,6 +92,7 @@ type Querier interface {
 	ListUsers(ctx context.Context) ([]User, error)
 	RemoveDayPlanItem(ctx context.Context, id uuid.UUID) error
 	RemoveDefaultDayItem(ctx context.Context, arg RemoveDefaultDayItemParams) (int64, error)
+	RemoveMealFavoriteCategory(ctx context.Context, arg RemoveMealFavoriteCategoryParams) error
 	// word_similarity (not whole-string similarity/%) so a typo in one word of a
 	// multi-word name (e.g. "chikcen" against "Chicken & Rice") still matches —
 	// whole-string trigram similarity dilutes a single-word typo's score too
@@ -94,9 +105,6 @@ type Querier interface {
 	SetAppSetting(ctx context.Context, arg SetAppSettingParams) error
 	SetMealNutrientValue(ctx context.Context, arg SetMealNutrientValueParams) error
 	SetUserNutrientGoal(ctx context.Context, arg SetUserNutrientGoalParams) error
-	// A single atomic flip rather than read-then-write from the caller, so a
-	// double-click (or two tabs) can't race into an inconsistent end state.
-	ToggleMealFavorite(ctx context.Context, id uuid.UUID) (Meal, error)
 	UpdateDayPlanItemQuantity(ctx context.Context, arg UpdateDayPlanItemQuantityParams) error
 	UpdateMeal(ctx context.Context, arg UpdateMealParams) (Meal, error)
 	UpdateMealCategory(ctx context.Context, arg UpdateMealCategoryParams) (MealCategory, error)

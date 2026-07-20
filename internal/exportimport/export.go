@@ -62,7 +62,7 @@ func (s *Store) Export(ctx context.Context, userID uuid.UUID, sel Selection) (Ex
 		}
 		for _, m := range meals {
 			cache.byID[m.ID] = m
-			exported, err := s.exportMeal(ctx, m, keyByID, labelNameByID)
+			exported, err := s.exportMeal(ctx, m, keyByID, labelNameByID, categoryNameByID)
 			if err != nil {
 				return Export{}, err
 			}
@@ -144,7 +144,7 @@ func (s *Store) Export(ctx context.Context, userID uuid.UUID, sel Selection) (Ex
 	return out, nil
 }
 
-func (s *Store) exportMeal(ctx context.Context, m sqlc.Meal, nutrientKeyByID map[int16]string, labelNameByID map[uuid.UUID]string) (Meal, error) {
+func (s *Store) exportMeal(ctx context.Context, m sqlc.Meal, nutrientKeyByID map[int16]string, labelNameByID, categoryNameByID map[uuid.UUID]string) (Meal, error) {
 	values, err := s.q.ListMealNutrientValues(ctx, m.ID)
 	if err != nil {
 		return Meal{}, fmt.Errorf("list nutrient values for meal %q: %w", m.Name, err)
@@ -167,13 +167,24 @@ func (s *Store) exportMeal(ctx context.Context, m sqlc.Meal, nutrientKeyByID map
 		}
 	}
 
+	favoriteCategoryIDs, err := s.q.ListFavoriteCategoryIDsForMeal(ctx, m.ID)
+	if err != nil {
+		return Meal{}, fmt.Errorf("list favorite categories for meal %q: %w", m.Name, err)
+	}
+	favoriteCategoryNames := make([]string, 0, len(favoriteCategoryIDs))
+	for _, id := range favoriteCategoryIDs {
+		if name, ok := categoryNameByID[id]; ok {
+			favoriteCategoryNames = append(favoriteCategoryNames, name)
+		}
+	}
+
 	return Meal{
-		MealRef:         mealRefOf(m),
-		RecipeURL:       m.RecipeUrl.String,
-		ServingLabel:    m.ServingLabel,
-		ServingAmount:   m.ServingAmount,
-		IsFavorite:      m.IsFavorite,
-		NutrientAmounts: amounts,
-		Labels:          labelNames,
+		MealRef:            mealRefOf(m),
+		RecipeURL:          m.RecipeUrl.String,
+		ServingLabel:       m.ServingLabel,
+		ServingAmount:      m.ServingAmount,
+		FavoriteCategories: favoriteCategoryNames,
+		NutrientAmounts:    amounts,
+		Labels:             labelNames,
 	}, nil
 }

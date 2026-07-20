@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"github.com/Stasky745/victus/internal/db/sqlc"
 	"github.com/Stasky745/victus/internal/goals"
+	"github.com/Stasky745/victus/internal/mealslib"
 	"github.com/Stasky745/victus/internal/planning"
 	"github.com/Stasky745/victus/web/templates/day"
 	"github.com/Stasky745/victus/web/templates/layout"
@@ -56,7 +57,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(formatWeekLabel(w.Start))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 14, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 15, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -69,7 +70,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 			var templ_7745c5c3_Var4 templ.SafeURL
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/weeks/" + prevWeekStart))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 16, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 17, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -82,7 +83,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 			var templ_7745c5c3_Var5 templ.SafeURL
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/weeks/" + nextWeekStart))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 18, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 19, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -132,7 +133,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(formatTotal(nt.Total))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 31, Col: 128}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 32, Col: 128}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -145,7 +146,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(nt.DisplayName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 32, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 33, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -158,7 +159,7 @@ func Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(nt.Unit)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 32, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 33, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -239,7 +240,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 		var templ_7745c5c3_Var14 templ.SafeURL
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/days/" + day.FormatDate(d.Date)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 50, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 51, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -252,7 +253,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(formatWeekday(d.Date))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 51, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 52, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -265,7 +266,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(formatShortDate(d.Date))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 52, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 53, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -300,7 +301,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(formatTotal(keyTotal(d.Totals, "calories").Total))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 56, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 57, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -313,7 +314,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(formatTotal(keyTotal(d.Totals, "protein_g").Total))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 59, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 60, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -332,7 +333,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 				var templ_7745c5c3_Var21 string
 				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(cat.Category.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 67, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 68, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -350,7 +351,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(item.MealName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 71, Col: 24}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 72, Col: 24}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -368,7 +369,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 						var templ_7745c5c3_Var23 string
 						templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuantity(item.Quantity))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 73, Col: 91}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 74, Col: 91}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 						if templ_7745c5c3_Err != nil {
@@ -386,7 +387,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var24 string
 					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue("/days/" + day.FormatDate(d.Date) + "/items/" + item.ID.String())
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 77, Col: 86}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 78, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 					if templ_7745c5c3_Err != nil {
@@ -399,7 +400,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue("Remove " + item.MealName + " from " + formatWeekday(d.Date) + "?")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 80, Col: 89}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 81, Col: 89}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 					if templ_7745c5c3_Err != nil {
@@ -412,7 +413,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue("Remove " + item.MealName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 81, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 82, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 					if templ_7745c5c3_Err != nil {
@@ -447,7 +448,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue("week-cat-" + day.FormatDate(d.Date))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 102, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 103, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 			if templ_7745c5c3_Err != nil {
@@ -465,7 +466,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(idString(c.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 104, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 105, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 				if templ_7745c5c3_Err != nil {
@@ -478,7 +479,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 				var templ_7745c5c3_Var29 string
 				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 104, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 105, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -496,7 +497,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue("/weeks/" + weekStart + "/days/" + day.FormatDate(d.Date) + "/meal-search")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 111, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 112, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 			if templ_7745c5c3_Err != nil {
@@ -509,7 +510,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue("#week-cat-" + day.FormatDate(d.Date))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 113, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 114, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
@@ -522,7 +523,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue("#week-search-" + day.FormatDate(d.Date))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 114, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 115, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -535,7 +536,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue("week-search-" + day.FormatDate(d.Date))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 119, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 120, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
@@ -554,7 +555,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/weeks/" + weekStart + "/copy"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 125, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 126, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
@@ -567,7 +568,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(layout.CSRFFieldName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 126, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 127, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
@@ -580,7 +581,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var36 string
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 126, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 127, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 			if templ_7745c5c3_Err != nil {
@@ -593,7 +594,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(day.FormatDate(d.Date))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 127, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 128, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -612,7 +613,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var38 string
 					templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(day.FormatDate(target.Date))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 131, Col: 87}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 132, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 					if templ_7745c5c3_Err != nil {
@@ -625,7 +626,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 					var templ_7745c5c3_Var39 string
 					templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(formatWeekday(target.Date))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 132, Col: 37}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 133, Col: 37}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 					if templ_7745c5c3_Err != nil {
@@ -656,7 +657,7 @@ func dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planni
 // Builder's fragment-swap scaffolding to hook into; a plain form submit is
 // simpler and handleDayAddItem already redirects back to the week view for
 // non-htmx requests.
-func SearchResults(dateStr string, csrfToken string, categoryID string, results []sqlc.Meal) templ.Component {
+func SearchResults(dateStr string, csrfToken string, categoryID string, results []mealslib.MealSearchResult) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -687,7 +688,7 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			for _, m := range results {
+			for _, item := range results {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<li><form method=\"POST\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -695,7 +696,7 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 				var templ_7745c5c3_Var41 templ.SafeURL
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/days/" + dateStr + "/items"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 159, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 160, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -708,7 +709,7 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(layout.CSRFFieldName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 160, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 161, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 				if templ_7745c5c3_Err != nil {
@@ -721,7 +722,7 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 160, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 161, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 				if templ_7745c5c3_Err != nil {
@@ -732,9 +733,9 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var44 string
-				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(idString(m.ID))
+				templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(idString(item.Meal.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 161, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 162, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 				if templ_7745c5c3_Err != nil {
@@ -747,7 +748,7 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 				var templ_7745c5c3_Var45 string
 				templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(categoryID)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 162, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 163, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 				if templ_7745c5c3_Err != nil {
@@ -758,9 +759,9 @@ func SearchResults(dateStr string, csrfToken string, categoryID string, results 
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var46 string
-				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(m.Name)
+				templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(item.Meal.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 164, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/week/week.templ`, Line: 165, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 				if templ_7745c5c3_Err != nil {
