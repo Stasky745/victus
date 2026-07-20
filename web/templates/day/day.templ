@@ -1,0 +1,154 @@
+package day
+
+import (
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/goals"
+	"github.com/Stasky745/victus/internal/planning"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ Page(csrfToken string, d planning.Day, prevDate, nextDate string, goalsList []goals.Goal, favorites []sqlc.Meal) {
+	@layout.Base("Day Builder", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">{ FormatDate(d.Date) }</h1>
+			<div class="flex items-center gap-3 text-sm">
+				<a href={ templ.URL("/days/" + prevDate) } class="vx-link">← Prev</a>
+				<a href="/" class="vx-link">Today</a>
+				<a href={ templ.URL("/days/" + nextDate) } class="vx-link">Next →</a>
+			</div>
+		</div>
+
+		@Summary(d, goalsList)
+
+		<div class="mt-6 space-y-6">
+			for _, section := range d.Categories {
+				<section>
+					<h2 class="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{ section.Category.Name }</h2>
+					@CategoryItems(FormatDate(d.Date), section)
+					<div class="mt-2">
+						<input
+							type="search"
+							placeholder={ "Add to " + section.Category.Name + "…" }
+							class="vx-input mt-0"
+							hx-get={ "/days/" + FormatDate(d.Date) + "/meal-search?category_id=" + idString(section.Category.ID) }
+							hx-trigger="keyup changed delay:250ms, search"
+							hx-target={ "#search-results-" + idString(section.Category.ID) }
+							hx-swap="innerHTML"
+							name="q"
+						/>
+						<!-- Pre-populated with favorites (not empty) so the most-used
+						     meals are a single click away without typing a search. -->
+						<div id={ "search-results-" + idString(section.Category.ID) } class="mt-1">
+							@FavoritesOrHint(FormatDate(d.Date), idString(section.Category.ID), favorites)
+						</div>
+					</div>
+				</section>
+			}
+		</div>
+	}
+}
+
+templ Summary(d planning.Day, goalsList []goals.Goal) {
+	<div id="day-summary" hx-swap-oob="true" class="vx-card p-4">
+		<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+			for _, nt := range d.Totals {
+				<div>
+					<div class={ "text-lg font-semibold", layout.GoalStatusClassFor(goalsList, nt.NutrientID, nt.Total) }>{ formatTotal(nt.Total) }</div>
+					<div class="text-xs text-slate-500 dark:text-slate-400">
+						{ nt.DisplayName } ({ nt.Unit })
+						if layout.HasGoalRange(goalsList, nt.NutrientID) {
+							<span class="block text-slate-400 dark:text-slate-500">{ layout.GoalRangeLabel(goalsList, nt.NutrientID) }</span>
+						}
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ CategoryItems(dateStr string, section planning.CategorySection) {
+	<ul id={ "category-" + idString(section.Category.ID) + "-items" } class="vx-list">
+		if len(section.Items) == 0 {
+			<li class="px-3 py-2 text-sm text-slate-400 dark:text-slate-500">Nothing added yet.</li>
+		}
+		for _, item := range section.Items {
+			<li class="flex items-center justify-between gap-3 px-3 py-2">
+				<span class="text-sm">{ item.MealName }</span>
+				<div class="flex items-center gap-2">
+					<input
+						type="number"
+						step="any"
+						min="0"
+						name="quantity"
+						value={ formatQuantity(item.Quantity) }
+						class="vx-input mt-0 w-16"
+						hx-patch={ "/days/" + dateStr + "/items/" + item.ID.String() }
+						hx-trigger="change delay:300ms"
+						hx-swap="none"
+						hx-sync="this:replace"
+					/>
+					<button
+						type="button"
+						hx-delete={ "/days/" + dateStr + "/items/" + item.ID.String() }
+						hx-target="closest li"
+						hx-swap="delete"
+						hx-confirm="Remove this from today?"
+						class="vx-link-danger text-xs"
+					>
+						Remove
+					</button>
+				</div>
+			</li>
+		}
+	</ul>
+}
+
+// ResetSearchResults is rendered as an out-of-band swap after a successful
+// add, replacing the category's search-results dropdown with the favorites
+// quick-add list (its original pre-search state) — otherwise the
+// just-added meal's "Add" button stays visible and clickable, and a second
+// click would insert a duplicate item (AddItem has no dedup guard, since
+// re-adding the same meal deliberately IS allowed as a distinct entry).
+templ ResetSearchResults(dateStr string, categoryID string, favorites []sqlc.Meal) {
+	<div id={ "search-results-" + categoryID } hx-swap-oob="true" class="mt-1">
+		@FavoritesOrHint(dateStr, categoryID, favorites)
+	</div>
+}
+
+// FavoritesOrHint is the search box's pre-search / post-add state: favorite
+// meals as one-click Add buttons, or a hint pointing at how to get some.
+templ FavoritesOrHint(dateStr string, categoryID string, favorites []sqlc.Meal) {
+	if len(favorites) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">Search above, or star meals in the Meal Library for one-click add here.</p>
+	} else {
+		@mealAddButtons(dateStr, categoryID, favorites)
+	}
+}
+
+templ SearchResults(dateStr string, categoryID string, results []sqlc.Meal) {
+	if len(results) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching meals.</p>
+	} else {
+		@mealAddButtons(dateStr, categoryID, results)
+	}
+}
+
+templ mealAddButtons(dateStr string, categoryID string, results []sqlc.Meal) {
+	<ul class="vx-list">
+		for _, m := range results {
+			<li>
+				<button
+					type="button"
+					hx-post={ "/days/" + dateStr + "/items" }
+					hx-vals={ layout.JSONAttr(map[string]string{"meal_id": idString(m.ID), "category_id": categoryID}) }
+					hx-target={ "#category-" + categoryID + "-items" }
+					hx-swap="outerHTML"
+					class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-vxborder"
+				>
+					<span class="text-sm">{ m.Name }</span>
+					<span class="vx-link-accent text-xs">Add</span>
+				</button>
+			</li>
+		}
+	</ul>
+}

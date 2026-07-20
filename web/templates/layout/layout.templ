@@ -1,0 +1,63 @@
+package layout
+
+// Base is the page shell. csrfToken is threaded into hx-headers on <body> so
+// every htmx request (including hx-put/hx-delete, which don't submit a form
+// field) carries X-CSRF-Token automatically.
+templ Base(title string, csrfToken string) {
+	<!DOCTYPE html>
+	<html lang="en" class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · Victus</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script src="/static/htmx.min.js"></script>
+			<script src="/static/theme.js"></script>
+		</head>
+		<body class="vx-shell h-full" hx-headers={ JSONAttr(map[string]string{"X-CSRF-Token": csrfToken}) }>
+			<header class="vx-header">
+				<nav class="mx-auto flex max-w-4xl items-center gap-6 px-4 py-3">
+					<span class="font-semibold">Victus</span>
+					<a href="/" class="vx-nav-link">Day</a>
+					<a href="/weeks" class="vx-nav-link">Week</a>
+					<a href="/meals" class="vx-nav-link">Meals</a>
+					<a href="/defaults" class="vx-nav-link">Defaults</a>
+					<a href="/settings" class="vx-nav-link">Configuration</a>
+					<div class="ml-auto flex items-center gap-1">
+						<button type="button" id="theme-toggle" class="vx-icon-btn" aria-label="Toggle dark mode">
+							@sunIcon()
+							@moonIcon()
+						</button>
+						<form method="POST" action="/logout">
+							<input type="hidden" name={ CSRFFieldName } value={ csrfToken }/>
+							<button type="submit" class="vx-nav-link">Log out</button>
+						</form>
+					</div>
+				</nav>
+			</header>
+			<main class="mx-auto max-w-4xl px-4 py-6">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ sunIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-5 w-5 dark:hidden">
+		<circle cx="12" cy="12" r="4"></circle>
+		<line x1="12" y1="2" x2="12" y2="4"></line>
+		<line x1="12" y1="20" x2="12" y2="22"></line>
+		<line x1="4.2" y1="4.2" x2="5.6" y2="5.6"></line>
+		<line x1="18.4" y1="18.4" x2="19.8" y2="19.8"></line>
+		<line x1="2" y1="12" x2="4" y2="12"></line>
+		<line x1="20" y1="12" x2="22" y2="12"></line>
+		<line x1="4.2" y1="19.8" x2="5.6" y2="18.4"></line>
+		<line x1="18.4" y1="5.6" x2="19.8" y2="4.2"></line>
+	</svg>
+}
+
+templ moonIcon() {
+	<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="hidden h-5 w-5 dark:block">
+		<path d="M20 12.5A8 8 0 1 1 11.5 4a6.5 6.5 0 0 0 8.5 8.5Z"></path>
+	</svg>
+}

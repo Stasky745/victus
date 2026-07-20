@@ -1,0 +1,42 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - gosec # security issues (hardcoded creds, weak crypto, SQL string-building, ...)
+    - bodyclose # unclosed HTTP response bodies
+    - sqlclosecheck # unclosed sql.Rows/Stmt
+    - noctx # HTTP requests without context.Context
+    - errorlint # error wrapping correctness (errors.Is/As)
+    - unconvert # unnecessary type conversions
+    - unparam # unused function parameters
+    - misspell
+    - revive
+  settings:
+    gosec:
+      excludes:
+        - G404 # math/rand use is fine outside of security-sensitive randomness (we use crypto/rand for tokens)
+  exclusions:
+    generated: lax
+    rules:
+      - path: _templ\.go$
+        linters:
+          - revive
+          - unparam
+      - path: internal/db/sqlc/
+        linters:
+          - revive
+      - path: internal/db/sqlite/
+        linters:
+          - revive
+      - path: internal/db/sqliteadapter/
+        linters:
+          - revive # every method is a mechanical 1:1 wrapper around sqlc.Querier's own (already documented) methods
+      - path: _test\.go$
+        linters:
+          - gosec # test fixtures use obviously-fake credentials, not real secrets
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

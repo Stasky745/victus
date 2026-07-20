@@ -1,0 +1,27 @@
+.git
+.github
+.envrc
+.env
+.env.*
+!.env.example
+*.md
+flake.nix
+flake.lock
+.direnv
+
+# Build artifacts / local dev DB — never needed in the build context (the
+# builder stage runs `go build` from source), just wasted transfer + cache
+# invalidation if present.
+/bin/
+/dist/
+/victus
+*.test
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+coverage.out
+coverage.html
+*.cover
+*.prof
+*.pprof

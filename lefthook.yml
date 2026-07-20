@@ -1,0 +1,42 @@
+pre-commit:
+  parallel: true
+  commands:
+    git-secrets:
+      run: git secrets --scan {staged_files}
+    gofmt:
+      glob: "*.go"
+      run: |
+        files=$(gofmt -l {staged_files})
+        if [ -n "$files" ]; then
+          echo "The following files are not gofmt'd:"
+          echo "$files"
+          echo "Run: gofmt -w $files"
+          exit 1
+        fi
+    go-vet:
+      glob: "*.go"
+      run: go vet ./...
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run
+    generated-drift:
+      glob: "*.{go,templ,sql}"
+      run: |
+        go generate ./... > /dev/null
+        if ! git diff --exit-code -- '*_templ.go' internal/db/sqlc > /dev/null; then
+          echo "Generated code (templ/sqlc) is stale. Run 'go generate ./...' and commit the result."
+          exit 1
+        fi
+    tailwind-drift:
+      glob: "*.{templ,css}"
+      run: |
+        tailwindcss -i web/static/input.css -o /tmp/victus-app.css --minify > /dev/null 2>&1
+        if ! diff -q /tmp/victus-app.css web/static/app.css > /dev/null; then
+          echo "web/static/app.css is stale. Run: tailwindcss -i web/static/input.css -o web/static/app.css --minify"
+          exit 1
+        fi
+
+commit-msg:
+  commands:
+    git-secrets-commit-msg:
+      run: git secrets --scan --commit-msg-file {1}

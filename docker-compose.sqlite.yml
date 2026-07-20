@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_DRIVER: sqlite
+      DATABASE_URL: /data/victus.db
+    volumes:
+      - victus-sqlite-data:/data
+    ports:
+      - "8080:8080"
+    # Unlike the Postgres compose file, the app container does need to write
+    # to disk here (the SQLite file itself) — /data is the one writable
+    # mount; /tmp still needs to stay a tmpfs since read_only forbids writing
+    # anywhere else on the root filesystem.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  victus-sqlite-data:

@@ -1,0 +1,57 @@
+package meals
+
+import (
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ CategoriesPage(csrfToken string, categories []sqlc.MealCategory, errorMsg string) {
+	@layout.Base("Meal Categories", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">Meal Categories</h1>
+			<a href="/meals" class="vx-link">Back to meals</a>
+		</div>
+		<p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+			Categories are the slots you'll fill in when building a day (breakfast, lunch, ...) — add
+			as many as fit how you actually eat.
+		</p>
+		if errorMsg != "" {
+			<div class="vx-alert-error mb-4">
+				{ errorMsg }
+			</div>
+		}
+		<ul class="vx-list mb-6">
+			for _, c := range categories {
+				<li class="flex items-center justify-between gap-4 px-4 py-3">
+					<form action={ templ.URL("/meals/categories/" + idString(c.ID)) } method="POST" class="flex flex-1 items-center gap-2">
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<input type="text" name="name" value={ c.Name } class="vx-input mt-0 w-full max-w-xs"/>
+						<button type="submit" class="vx-link-accent text-xs">Rename</button>
+					</form>
+					<form
+						action={ templ.URL("/meals/categories/" + idString(c.ID) + "/delete") }
+						method="POST"
+						hx-boost="true"
+						hx-confirm="Delete this category? This can't be undone."
+					>
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<button type="submit" class="vx-link-danger text-xs">Delete</button>
+					</form>
+				</li>
+			}
+		</ul>
+		<form action="/meals/categories" method="POST" class="flex items-center gap-2">
+			<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+			<input
+				type="text"
+				name="name"
+				placeholder="New category name"
+				required
+				class="vx-input mt-0 w-full max-w-xs"
+			/>
+			<button type="submit" class="vx-btn-primary px-3 py-1.5">
+				Add
+			</button>
+		</form>
+	}
+}

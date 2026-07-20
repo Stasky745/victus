@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* Enables class-based dark mode (.dark on <html>) instead of only following
+   prefers-color-scheme, so the header toggle in layout.templ can override
+   the system preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Victus's dark theme deliberately matches the original prototype
+   (fat-loss-meal-planner.jsx)'s palette exactly — a near-black neutral
+   scale that Tailwind's built-in slate/neutral/zinc scales don't quite hit,
+   so it gets its own tokens. The accent/status colors (blue/green/red/
+   amber/purple) needed no new tokens: the prototype's hex values are
+   Tailwind's default -500 shades exactly.
+   bg:     page background
+   card:   card/header/input surface, one step up from bg
+   border: hairline borders and dividers, one step up from card
+   text:   primary text
+   muted:  secondary/label text */
+@theme {
+  --color-vxbg: #0f0f0f;
+  --color-vxcard: #1a1a1a;
+  --color-vxborder: #2a2a2a;
+  --color-vxtext: #e5e5e5;
+  --color-vxmuted: #888888;
+}
+
+/* Victus's small design system: every page composes these instead of
+   repeating raw utility soup, so light/dark and spacing/radius choices stay
+   consistent and only need updating in one place. */
+@layer components {
+  .vx-shell {
+    @apply min-h-full bg-slate-50 text-slate-900 dark:bg-vxbg dark:text-vxtext;
+  }
+  .vx-header {
+    @apply border-b border-slate-200 bg-white dark:border-vxborder dark:bg-vxcard;
+  }
+  .vx-nav-link {
+    @apply text-sm text-slate-600 transition hover:text-slate-900 dark:text-vxmuted dark:hover:text-vxtext;
+  }
+  .vx-nav-link-active {
+    @apply text-sm font-medium text-slate-900 dark:text-vxtext;
+  }
+  .vx-icon-btn {
+    @apply rounded-md p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-vxmuted dark:hover:bg-vxborder dark:hover:text-vxtext;
+  }
+
+  .vx-card {
+    @apply rounded-lg border border-slate-200 bg-white dark:border-vxborder dark:bg-vxcard;
+  }
+  .vx-list {
+    @apply divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white dark:divide-vxborder dark:border-vxborder dark:bg-vxcard;
+  }
+  .vx-empty {
+    @apply rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500 dark:border-vxborder dark:text-vxmuted;
+  }
+
+  .vx-label {
+    @apply block text-sm font-medium text-slate-700 dark:text-vxmuted;
+  }
+  .vx-input {
+    @apply mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-vxborder dark:bg-vxcard dark:text-vxtext dark:placeholder-vxmuted;
+  }
+
+  .vx-btn-primary {
+    @apply rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500;
+  }
+  .vx-link {
+    @apply text-sm text-slate-600 transition hover:text-slate-900 hover:underline dark:text-vxmuted dark:hover:text-vxtext;
+  }
+  .vx-link-danger {
+    @apply text-red-600 transition hover:text-red-700 hover:underline dark:text-red-500 dark:hover:text-red-400;
+  }
+  .vx-link-accent {
+    @apply text-blue-600 transition hover:text-blue-700 hover:underline dark:text-blue-500 dark:hover:text-blue-400;
+  }
+
+  .vx-alert-error {
+    @apply rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400;
+  }
+  .vx-badge {
+    @apply rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-vxborder dark:text-vxmuted;
+  }
+
+  /* Colored pill badges for meal labels — one class per fixed palette color
+     (see mealslib.LabelColors), light-mode solid-tint / dark-mode
+     translucent-tint, matching the prototype's Badge component. */
+  .vx-badge-red {
+    @apply rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-400;
+  }
+  .vx-badge-green {
+    @apply rounded-full border border-green-200 bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-400;
+  }
+  .vx-badge-blue {
+    @apply rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-400;
+  }
+  .vx-badge-purple {
+    @apply rounded-full border border-purple-200 bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:border-purple-500/30 dark:bg-purple-500/15 dark:text-purple-400;
+  }
+  .vx-badge-amber {
+    @apply rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-400;
+  }
+  .vx-badge-gray {
+    @apply rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:border-vxborder dark:bg-vxborder dark:text-vxmuted;
+  }
+
+  /* A meal/preset shown as a directly-clickable toggle button (favorites
+     quick-add) rather than a search result — mirrors the prototype's
+     button-grid picker. .vx-toggle-on marks the selected/favorited state. */
+  .vx-toggle {
+    @apply rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-slate-300 dark:border-vxborder dark:bg-vxcard dark:hover:border-vxmuted;
+  }
+  .vx-toggle-on {
+    @apply border-blue-600 bg-blue-50 dark:border-blue-500 dark:bg-blue-500/10;
+  }
+}

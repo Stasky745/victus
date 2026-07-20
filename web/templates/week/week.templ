@@ -1,0 +1,181 @@
+package week
+
+import (
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/goals"
+	"github.com/Stasky745/victus/internal/planning"
+	"github.com/Stasky745/victus/web/templates/day"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ Page(csrfToken string, w planning.Week, prevWeekStart, nextWeekStart string, goalsList []goals.Goal, categories []sqlc.MealCategory) {
+	@layout.Base("Weekly Builder", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">Week of { formatWeekLabel(w.Start) }</h1>
+			<div class="flex items-center gap-3 text-sm">
+				<a href={ templ.URL("/weeks/" + prevWeekStart) } class="vx-link">← Prev</a>
+				<a href="/weeks" class="vx-link">This week</a>
+				<a href={ templ.URL("/weeks/" + nextWeekStart) } class="vx-link">Next →</a>
+			</div>
+		</div>
+
+		<div class="vx-card mb-6 p-4">
+			<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-vxmuted">Week average (per day)</div>
+			<div class="flex flex-wrap justify-around gap-3 text-center">
+				for i, nt := range w.Average {
+					<div class="flex items-center gap-3">
+						if i > 0 {
+							<div class="h-8 w-px bg-slate-200 dark:bg-vxborder"></div>
+						}
+						<div>
+							<div class={ "text-xl font-bold", layout.GoalStatusClassFor(goalsList, nt.NutrientID, nt.Total) }>{ formatTotal(nt.Total) }</div>
+							<div class="text-xs text-slate-500 dark:text-vxmuted">{ nt.DisplayName } ({ nt.Unit })</div>
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+
+		<div class="space-y-3">
+			for _, d := range w.Days {
+				@dayRow(csrfToken, day.FormatDate(w.Start), d, w.Days, categories, goalsList)
+			}
+		</div>
+	}
+}
+
+templ dayRow(csrfToken string, weekStart string, d planning.Day, allDays []planning.Day, categories []sqlc.MealCategory, goalsList []goals.Goal) {
+	<div class={ "vx-card border-l-4 p-4", layout.GoalStatusBorderClassFor(goalsList, keyTotal(d.Totals, "calories").NutrientID, keyTotal(d.Totals, "calories").Total) }>
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<a href={ templ.URL("/days/" + day.FormatDate(d.Date)) } class="text-base font-semibold hover:underline">
+				{ formatWeekday(d.Date) }
+				<span class="font-normal text-slate-500 dark:text-vxmuted">{ formatShortDate(d.Date) }</span>
+			</a>
+			<div class="flex items-baseline gap-2">
+				<span class={ "text-2xl font-bold", layout.GoalStatusClassFor(goalsList, keyTotal(d.Totals, "calories").NutrientID, keyTotal(d.Totals, "calories").Total) }>
+					{ formatTotal(keyTotal(d.Totals, "calories").Total) }
+				</span>
+				<span class="text-xs text-slate-500 dark:text-vxmuted">kcal</span>
+				<span class="text-sm font-medium text-slate-600 dark:text-vxmuted">{ formatTotal(keyTotal(d.Totals, "protein_g").Total) }g protein</span>
+			</div>
+		</div>
+
+		<div class="mt-2 space-y-1.5 text-sm">
+			for _, cat := range d.Categories {
+				if len(cat.Items) > 0 {
+					<div>
+						<div class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-vxmuted">{ cat.Category.Name }</div>
+						<div class="flex flex-wrap gap-1.5">
+							for _, item := range cat.Items {
+								<span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-0.5 pl-2 pr-1 text-xs dark:border-vxborder dark:bg-vxcard">
+									{ item.MealName }
+									if item.Quantity != 1 {
+										<span class="text-slate-400 dark:text-vxmuted">× { formatQuantity(item.Quantity) }</span>
+									}
+									<button
+										type="button"
+										hx-delete={ "/days/" + day.FormatDate(d.Date) + "/items/" + item.ID.String() }
+										hx-target="closest span"
+										hx-swap="delete"
+										hx-confirm={ "Remove " + item.MealName + " from " + formatWeekday(d.Date) + "?" }
+										aria-label={ "Remove " + item.MealName }
+										class="rounded-full px-1 text-slate-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-500/15 dark:hover:text-red-400"
+									>
+										×
+									</button>
+								</span>
+							}
+						</div>
+					</div>
+				}
+			}
+			if isDayEmpty(d) {
+				<div class="text-slate-400 dark:text-vxmuted">Nothing planned.</div>
+			}
+		</div>
+
+		<div class="mt-3 flex flex-wrap gap-4 border-t border-slate-100 pt-3 text-xs dark:border-vxborder">
+			if len(categories) > 0 {
+				<details>
+					<summary class="vx-link-accent cursor-pointer">Add meal…</summary>
+					<div class="mt-2 flex flex-wrap items-center gap-2">
+						<select id={ "week-cat-" + day.FormatDate(d.Date) } name="category_id" class="vx-input mt-0 w-auto py-1">
+							for _, c := range categories {
+								<option value={ idString(c.ID) }>{ c.Name }</option>
+							}
+						</select>
+						<input
+							type="search"
+							placeholder="Search meals…"
+							class="vx-input mt-0 w-48 py-1"
+							hx-get={ "/weeks/" + weekStart + "/days/" + day.FormatDate(d.Date) + "/meal-search" }
+							hx-trigger="keyup changed delay:250ms, search"
+							hx-include={ "#week-cat-" + day.FormatDate(d.Date) }
+							hx-target={ "#week-search-" + day.FormatDate(d.Date) }
+							hx-swap="innerHTML"
+							name="q"
+						/>
+					</div>
+					<div id={ "week-search-" + day.FormatDate(d.Date) } class="mt-1 max-w-sm"></div>
+				</details>
+			}
+			if !isDayEmpty(d) {
+				<details>
+					<summary class="vx-link-accent cursor-pointer">Copy to…</summary>
+					<form action={ templ.URL("/weeks/" + weekStart + "/copy") } method="POST" class="mt-2 flex flex-wrap items-center gap-3">
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<input type="hidden" name="source_date" value={ day.FormatDate(d.Date) }/>
+						for _, target := range allDays {
+							if !target.Date.Equal(d.Date) {
+								<label class="flex items-center gap-1 text-slate-600 dark:text-vxmuted">
+									<input type="checkbox" name="target_dates" value={ day.FormatDate(target.Date) }/>
+									{ formatWeekday(target.Date) }
+								</label>
+							}
+						}
+						<button type="submit" class="vx-btn-primary px-2 py-1 text-xs">
+							Copy
+						</button>
+					</form>
+				</details>
+			}
+		</div>
+	</div>
+}
+
+// SearchResults renders the Week Builder's "add meal" search results — each
+// one a small standalone form (not an htmx-target button like the Day
+// Builder's day.SearchResults) since a week day row has none of the Day
+// Builder's fragment-swap scaffolding to hook into; a plain form submit is
+// simpler and handleDayAddItem already redirects back to the week view for
+// non-htmx requests.
+templ SearchResults(dateStr string, csrfToken string, categoryID string, results []sqlc.Meal) {
+	if len(results) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-vxmuted">No matching meals.</p>
+	} else {
+		<ul class="vx-list">
+			for _, m := range results {
+				<li>
+					<form method="POST" action={ templ.URL("/days/" + dateStr + "/items") }>
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<input type="hidden" name="meal_id" value={ idString(m.ID) }/>
+						<input type="hidden" name="category_id" value={ categoryID }/>
+						<button type="submit" class="flex w-full items-center justify-between gap-2 px-2 py-1 text-left hover:bg-slate-50 dark:hover:bg-vxborder">
+							<span class="truncate text-xs">{ m.Name }</span>
+							<span class="vx-link-accent shrink-0 text-xs">Add</span>
+						</button>
+					</form>
+				</li>
+			}
+		</ul>
+	}
+}
+
+func isDayEmpty(d planning.Day) bool {
+	for _, cat := range d.Categories {
+		if len(cat.Items) > 0 {
+			return false
+		}
+	}
+	return true
+}

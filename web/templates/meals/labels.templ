@@ -1,0 +1,62 @@
+package meals
+
+import (
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/mealslib"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ LabelsPage(csrfToken string, labels []sqlc.MealLabel, errorMsg string) {
+	@layout.Base("Meal Labels", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">Meal Labels</h1>
+			<a href="/meals" class="vx-link">Back to meals</a>
+		</div>
+		<p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+			Tag meals (meat, quick, carb-heavy, ...) to filter the library by them — a meal can carry
+			any number of labels.
+		</p>
+		if errorMsg != "" {
+			<div class="vx-alert-error mb-4">
+				{ errorMsg }
+			</div>
+		}
+		<ul class="vx-list mb-6">
+			if len(labels) == 0 {
+				<li class="px-4 py-3 text-sm text-slate-400 dark:text-vxmuted">No labels yet.</li>
+			}
+			for _, l := range labels {
+				<li class="flex items-center justify-between gap-4 px-4 py-3">
+					<span class={ labelBadgeClass(l.Color) }>{ l.Name }</span>
+					<form
+						action={ templ.URL("/meals/labels/" + idString(l.ID) + "/delete") }
+						method="POST"
+						hx-boost="true"
+						hx-confirm="Delete this label? It will be removed from every meal that has it."
+					>
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<button type="submit" class="vx-link-danger text-xs">Delete</button>
+					</form>
+				</li>
+			}
+		</ul>
+		<form action="/meals/labels" method="POST" class="flex flex-wrap items-center gap-2">
+			<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+			<input
+				type="text"
+				name="name"
+				placeholder="New label name"
+				required
+				class="vx-input mt-0 w-full max-w-xs"
+			/>
+			<select name="color" class="vx-input mt-0 w-32">
+				for _, c := range mealslib.LabelColors {
+					<option value={ c }>{ c }</option>
+				}
+			</select>
+			<button type="submit" class="vx-btn-primary px-3 py-1.5">
+				Add
+			</button>
+		</form>
+	}
+}

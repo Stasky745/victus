@@ -1,0 +1,37 @@
+# Go
+/bin/
+*.exe
+*.test
+/victus
+coverage.out
+coverage.html
+*.cover
+*.prof
+*.pprof
+
+# SQLite (the default local DB_DRIVER — DATABASE_URL defaults to ./victus.db)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Nix
+.direnv/
+
+# Build artifacts
+/dist/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

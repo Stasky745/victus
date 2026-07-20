@@ -1,0 +1,111 @@
+package meals
+
+import (
+	"strconv"
+
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/mealslib"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ FormPage(csrfToken string, meal mealslib.Meal, allLabels []sqlc.MealLabel, isEdit bool, errorMsg string) {
+	@layout.Base(formTitle(isEdit), csrfToken) {
+		<h1 class="mb-4 text-lg font-semibold">{ formTitle(isEdit) }</h1>
+		if errorMsg != "" {
+			<div class="vx-alert-error mb-4">
+				{ errorMsg }
+			</div>
+		}
+		<form
+			if isEdit {
+				action={ templ.URL("/meals/" + meal.ID.String()) }
+			} else {
+				action="/meals"
+			}
+			method="POST"
+			class="space-y-6"
+		>
+			<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+			<div class="vx-card p-4">
+				<label class="vx-label">
+					Name
+					<input type="text" name="name" required value={ meal.Name } class="vx-input"/>
+				</label>
+				<label class="vx-label mt-4">
+					Recipe URL
+					<span class="font-normal text-slate-500 dark:text-slate-400">(optional — link to the actual recipe)</span>
+					<input type="url" name="recipe_url" value={ meal.RecipeURL } placeholder="https://…" class="vx-input"/>
+				</label>
+				<label class="mt-4 flex items-center gap-2 text-sm">
+					<input type="checkbox" name="is_favorite" value="true" checked?={ meal.IsFavorite }/>
+					Favorite — show as a one-click quick-add on the Day/Week/Default builders
+				</label>
+				if len(allLabels) > 0 {
+					<div class="mt-4">
+						<div class="vx-label mb-1">Labels</div>
+						<div class="flex flex-wrap gap-2">
+							for _, l := range allLabels {
+								<label class="flex cursor-pointer items-center gap-1.5">
+									<input type="checkbox" name="label_ids" value={ idString(l.ID) } checked?={ hasLabel(meal.Labels, l.ID) }/>
+									<span class={ labelBadgeClass(l.Color) }>{ l.Name }</span>
+								</label>
+							}
+						</div>
+					</div>
+				}
+				<div class="mt-4 grid grid-cols-2 gap-4">
+					<label class="vx-label">
+						Serving label
+						<input type="text" name="serving_label" value={ meal.ServingLabel } class="vx-input"/>
+					</label>
+					<label class="vx-label">
+						Serving amount
+						<input
+							type="number"
+							step="any"
+							min="0"
+							name="serving_amount"
+							value={ strconv.FormatFloat(meal.ServingAmount, 'f', -1, 64) }
+							class="vx-input"
+						/>
+					</label>
+				</div>
+			</div>
+			<div class="vx-card p-4">
+				<div class="mb-3 text-sm font-medium">Nutrition (per serving above)</div>
+				<div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+					for _, nv := range meal.NutrientValues {
+						<label class="vx-label text-xs">
+							{ nv.DisplayName } ({ nv.Unit })
+							<input
+								type="number"
+								step="any"
+								min="0"
+								name={ "nutrient_" + strconv.Itoa(int(nv.NutrientID)) }
+								value={ formatAmount(nv.Amount) }
+								class="vx-input py-1.5"
+							/>
+						</label>
+					}
+				</div>
+			</div>
+			<div class="flex items-center gap-3">
+				<button type="submit" class="vx-btn-primary">
+					if isEdit {
+						Save changes
+					} else {
+						Add meal
+					}
+				</button>
+				<a href="/meals" class="vx-link">Cancel</a>
+			</div>
+		</form>
+	}
+}
+
+func formTitle(isEdit bool) string {
+	if isEdit {
+		return "Edit meal"
+	}
+	return "New meal"
+}

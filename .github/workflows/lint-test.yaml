@@ -1,0 +1,86 @@
+name: lint-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history, not the default shallow clone — the git-secrets
+          # scan below uses --scan-history, which only sees whatever commits
+          # were actually fetched.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
+
+      - uses: sqlc-dev/setup-sqlc@v5
+        with:
+          sqlc-version: "1.31.1"
+
+      - name: gofmt check
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+
+      - name: Generated-code drift check (templ + sqlc, both engines)
+        run: |
+          go generate ./...
+          if ! git diff --exit-code -- '*_templ.go' internal/db/sqlc internal/db/sqlite; then
+            echo "Generated code is stale — run 'go generate ./...' and commit the result."
+            exit 1
+          fi
+
+      - name: git-secrets scan
+        run: |
+          sudo apt-get update && sudo apt-get install -y git-secrets
+          git secrets --install -f
+          git secrets --register-aws
+          while IFS= read -r p; do git secrets --add "$p"; done < .git-secrets-patterns
+          git secrets --scan-history
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both of Victus's supported database backends must pass the exact
+        # same test suite — see internal/dbtest, which picks between them via
+        # this same TEST_DB_DRIVER env var.
+        db-driver: [postgres, sqlite]
+    env:
+      TEST_DB_DRIVER: ${{ matrix.db-driver }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: go test
+        run: go test ./... -race -shuffle=on

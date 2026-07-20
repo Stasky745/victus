@@ -1,0 +1,44 @@
+package login
+
+import (
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ Page(csrfToken string, errMsg string) {
+	<!DOCTYPE html>
+	<html lang="en" class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Log in · Victus</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script src="/static/theme.js"></script>
+		</head>
+		<body class="vx-shell flex h-full items-center justify-center px-4">
+			<div class="w-full max-w-sm">
+				<div class="vx-card p-6">
+					<h1 class="mb-6 text-center text-xl font-semibold">Victus</h1>
+					if errMsg != "" {
+						<div class="vx-alert-error mb-4">
+							{ errMsg }
+						</div>
+					}
+					<form method="POST" action="/login" class="space-y-4">
+						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+						<label class="vx-label">
+							Email
+							<input type="email" name="email" required autofocus class="vx-input"/>
+						</label>
+						<label class="vx-label">
+							Password
+							<input type="password" name="password" required class="vx-input"/>
+						</label>
+						<button type="submit" class="vx-btn-primary w-full">
+							Log in
+						</button>
+					</form>
+				</div>
+			</div>
+		</body>
+	</html>
+}

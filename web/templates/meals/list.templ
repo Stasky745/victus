@@ -1,0 +1,120 @@
+package meals
+
+import (
+	"github.com/google/uuid"
+
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/mealslib"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ ListPage(csrfToken string, mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label, allLabels []sqlc.MealLabel, activeLabelID uuid.UUID) {
+	@layout.Base("Meal Library", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">Meal Library</h1>
+			<div class="flex items-center gap-3">
+				<a href="/meals/labels" class="vx-link">Labels</a>
+				<a href="/meals/categories" class="vx-link">Categories</a>
+				<a href="/meals/import" class="vx-link">Import</a>
+				<a href="/meals/new" class="vx-btn-primary">
+					New meal
+				</a>
+			</div>
+		</div>
+		if len(allLabels) > 0 {
+			<div class="mb-3 flex flex-wrap items-center gap-2">
+				<a href="/meals" class={ "vx-badge-gray", templ.KV("ring-2 ring-blue-500", activeLabelID == uuid.Nil) }>All</a>
+				for _, l := range allLabels {
+					<a
+						href={ templ.URL("/meals?label_id=" + idString(l.ID)) }
+						class={ labelBadgeClass(l.Color), templ.KV("ring-2 ring-blue-500", l.ID == activeLabelID) }
+					>
+						{ l.Name }
+					</a>
+				}
+			</div>
+		}
+		<input type="hidden" id="label-filter-value" name="label_id" value={ labelIDValue(activeLabelID) }/>
+		<input
+			type="search"
+			name="q"
+			placeholder="Search meals…"
+			class="vx-input mb-4 mt-0"
+			hx-get="/meals/search"
+			hx-trigger="keyup changed delay:250ms, search"
+			hx-target="#meal-results"
+			hx-swap="innerHTML"
+			hx-include="#label-filter-value"
+		/>
+		<div id="meal-results">
+			@Results(mealsList, labelsByMeal)
+		</div>
+	}
+}
+
+templ Results(mealsList []sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label) {
+	if len(mealsList) == 0 {
+		<p class="vx-empty">
+			No meals found.
+		</p>
+	} else {
+		<ul class="vx-list">
+			for _, m := range mealsList {
+				@ResultItem(m, labelsByMeal)
+			}
+		</ul>
+	}
+}
+
+templ ResultItem(m sqlc.Meal, labelsByMeal map[uuid.UUID][]mealslib.Label) {
+	<li id={ "meal-" + idString(m.ID) } class="flex items-center justify-between px-4 py-3">
+		<div>
+			<div class="flex items-center gap-2">
+				<button
+					type="button"
+					hx-post={ "/meals/" + idString(m.ID) + "/favorite" }
+					hx-target={ "#meal-" + idString(m.ID) }
+					hx-swap="outerHTML"
+					aria-label="Toggle favorite"
+					class={ "text-sm", templ.KV("text-amber-500", m.IsFavorite), templ.KV("text-slate-300 dark:text-vxborder", !m.IsFavorite) }
+				>
+					if m.IsFavorite {
+						★
+					} else {
+						☆
+					}
+				</button>
+				<div class="text-sm font-medium">{ m.Name }</div>
+				for _, l := range labelsByMeal[m.ID] {
+					<span class={ labelBadgeClass(l.Color) }>{ l.Name }</span>
+				}
+			</div>
+			<div class="text-xs text-slate-500 dark:text-vxmuted">{ m.ServingLabel }</div>
+		</div>
+		<div class="flex items-center gap-4">
+			if m.RecipeUrl.Valid && m.RecipeUrl.String != "" {
+				<a
+					href={ templ.URL(m.RecipeUrl.String) }
+					target="_blank"
+					rel="noopener noreferrer"
+					class="vx-link-accent text-xs"
+				>
+					Recipe ↗
+				</a>
+			}
+			<a href={ templ.URL("/meals/" + idString(m.ID) + "/edit") } class="vx-link text-xs">
+				Edit
+			</a>
+			<button
+				hx-delete={ "/meals/" + idString(m.ID) }
+				hx-target={ "#meal-" + idString(m.ID) }
+				hx-swap="delete"
+				hx-confirm="Delete this meal? This can't be undone."
+				class="vx-link-danger text-xs"
+				type="button"
+			>
+				Delete
+			</button>
+		</div>
+	</li>
+}

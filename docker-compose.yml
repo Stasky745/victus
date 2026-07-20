@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: victus
+      POSTGRES_USER: victus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Postgres 18's official image switched to a pg_ctlcluster-style layout:
+      # mount the parent directory and let it manage its own versioned
+      # subdirectory, rather than mounting .../data directly (the pre-18 convention).
+      - victus-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U victus -d victus"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_DRIVER: postgres
+      DATABASE_URL: postgres://victus:${POSTGRES_PASSWORD}@db:5432/victus?sslmode=disable
+    ports:
+      - "8080:8080"
+    # Victus keeps no state on disk of its own — everything durable lives in
+    # Postgres, and static assets are embedded in the binary — so the
+    # container never needs to write to its root filesystem at runtime.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  victus-db-data:

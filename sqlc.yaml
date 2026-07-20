@@ -1,0 +1,50 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/db/queries_postgres"
+    schema: "internal/db/migrations/postgres"
+    gen:
+      go:
+        package: "sqlc"
+        out: "internal/db/sqlc"
+        sql_package: "database/sql"
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "pg_catalog.numeric"
+            go_type: "float64"
+          - db_type: "pg_catalog.numeric"
+            nullable: true
+            go_type:
+              type: "float64"
+              pointer: true
+
+  - engine: "sqlite"
+    queries: "internal/db/queries_sqlite"
+    schema: "internal/db/migrations/sqlite"
+    gen:
+      go:
+        package: "sqlite"
+        out: "internal/db/sqlite"
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "uuid"
+            nullable: true
+            go_type: "github.com/google/uuid.NullUUID"
+          - db_type: "smallint"
+            go_type: "int16"
+          # LIMIT clause args (not tied to a column) default to int64 on
+          # sqlite vs int32 on postgres — align them so ListMeals/ListMealsByLabel/
+          # etc. share one signature across engines.
+          - db_type: "integer"
+            go_type: "int32"
+          - db_type: "numeric"
+            nullable: true
+            go_type:
+              type: "float64"
+              pointer: true

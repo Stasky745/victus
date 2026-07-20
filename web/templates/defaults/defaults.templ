@@ -1,0 +1,112 @@
+package defaults
+
+import (
+	"github.com/Stasky745/victus/internal/db/sqlc"
+	"github.com/Stasky745/victus/internal/planning"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ Page(csrfToken string, sections []planning.CategorySection, favorites []sqlc.Meal) {
+	@layout.Base("Default Day", csrfToken) {
+		<h1 class="mb-1 text-lg font-semibold">Default Day</h1>
+		<p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+			These meals are automatically added to any day you haven't touched yet — set a default
+			breakfast or snack here once, instead of adding it every day. Editing or removing an item on
+			a specific day never changes this template, and changes here never touch a day you've
+			already visited.
+		</p>
+		<div class="space-y-6">
+			for _, section := range sections {
+				<section>
+					<h2 class="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{ section.Category.Name }</h2>
+					@CategoryItems(section)
+					<div class="mt-2">
+						<input
+							type="search"
+							placeholder={ "Add to " + section.Category.Name + "…" }
+							class="vx-input mt-0"
+							hx-get={ "/defaults/meal-search?category_id=" + idString(section.Category.ID) }
+							hx-trigger="keyup changed delay:250ms, search"
+							hx-target={ "#defaults-search-" + idString(section.Category.ID) }
+							hx-swap="innerHTML"
+							name="q"
+						/>
+						<div id={ "defaults-search-" + idString(section.Category.ID) } class="mt-1">
+							@FavoritesOrHint(idString(section.Category.ID), favorites)
+						</div>
+					</div>
+				</section>
+			}
+		</div>
+	}
+}
+
+templ CategoryItems(section planning.CategorySection) {
+	<ul id={ "defaults-category-" + idString(section.Category.ID) + "-items" } class="vx-list">
+		if len(section.Items) == 0 {
+			<li class="px-3 py-2 text-sm text-slate-400 dark:text-slate-500">No default set.</li>
+		}
+		for _, item := range section.Items {
+			<li class="flex items-center justify-between gap-3 px-3 py-2">
+				<span class="text-sm">{ item.MealName }</span>
+				<button
+					type="button"
+					hx-delete={ "/defaults/items/" + item.ID.String() }
+					hx-target="closest li"
+					hx-swap="delete"
+					hx-confirm="Remove this default?"
+					class="vx-link-danger text-xs"
+				>
+					Remove
+				</button>
+			</li>
+		}
+	</ul>
+}
+
+// ResetSearchResults mirrors day.ResetSearchResults — see its doc comment
+// for why the search dropdown resets to favorites (not empty) after a
+// successful add.
+templ ResetSearchResults(categoryID string, favorites []sqlc.Meal) {
+	<div id={ "defaults-search-" + categoryID } hx-swap-oob="true" class="mt-1">
+		@FavoritesOrHint(categoryID, favorites)
+	</div>
+}
+
+// FavoritesOrHint is the search box's pre-search / post-add state — mirrors
+// day.FavoritesOrHint.
+templ FavoritesOrHint(categoryID string, favorites []sqlc.Meal) {
+	if len(favorites) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">Search above, or star meals in the Meal Library for one-click add here.</p>
+	} else {
+		@mealAddButtons(categoryID, favorites)
+	}
+}
+
+templ SearchResults(categoryID string, results []sqlc.Meal) {
+	if len(results) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching meals.</p>
+	} else {
+		@mealAddButtons(categoryID, results)
+	}
+}
+
+templ mealAddButtons(categoryID string, results []sqlc.Meal) {
+	<ul class="vx-list">
+		for _, m := range results {
+			<li>
+				<button
+					type="button"
+					hx-post="/defaults/items"
+					hx-vals={ layout.JSONAttr(map[string]string{"meal_id": idString(m.ID), "category_id": categoryID}) }
+					hx-target={ "#defaults-category-" + categoryID + "-items" }
+					hx-swap="outerHTML"
+					class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-vxborder"
+				>
+					<span class="text-sm">{ m.Name }</span>
+					<span class="vx-link-accent text-xs">Add</span>
+				</button>
+			</li>
+		}
+	</ul>
+}

@@ -1,0 +1,123 @@
+package meals
+
+import (
+	"github.com/Stasky745/victus/internal/importers/mealie"
+	"github.com/Stasky745/victus/internal/importers/openfoodfacts"
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+templ ImportPage(csrfToken string, mealieConfigured bool) {
+	@layout.Base("Import Meals", csrfToken) {
+		<div class="mb-4 flex items-center justify-between">
+			<h1 class="text-lg font-semibold">Import Meals</h1>
+			<a href="/meals" class="vx-link">Back to library</a>
+		</div>
+
+		if mealieConfigured {
+			<div class="vx-card mb-6 p-4">
+				<div class="mb-2 flex items-center gap-2">
+					<span class="text-sm font-medium">Search Mealie</span>
+					<span id="mealie-search-indicator" class="htmx-indicator text-xs text-slate-400 dark:text-slate-500">Searching…</span>
+				</div>
+				<input
+					type="search"
+					name="q"
+					placeholder="Search your Mealie recipes…"
+					class="vx-input mt-0"
+					hx-get="/meals/import/mealie/search"
+					hx-trigger="keyup changed delay:300ms, search"
+					hx-target="#mealie-results"
+					hx-swap="innerHTML"
+					hx-indicator="#mealie-search-indicator"
+					hx-sync="this:replace"
+				/>
+				<div id="mealie-results" class="mt-2"></div>
+			</div>
+		}
+
+		<div class="vx-card mb-6 p-4">
+			<div class="mb-2 flex items-center gap-2">
+				<span class="text-sm font-medium">Search Open Food Facts</span>
+				<span id="off-search-indicator" class="htmx-indicator text-xs text-slate-400 dark:text-slate-500">Searching… (Open Food Facts can take several seconds)</span>
+			</div>
+			<input
+				type="search"
+				name="q"
+				placeholder="Search packaged foods by name…"
+				class="vx-input mt-0"
+				hx-get="/meals/import/off/search"
+				hx-trigger="keyup changed delay:300ms, search"
+				hx-target="#off-results"
+				hx-swap="innerHTML"
+				hx-indicator="#off-search-indicator"
+				hx-sync="this:replace"
+			/>
+			<div id="off-results" class="mt-2"></div>
+		</div>
+
+		<div class="vx-card p-4">
+			<div class="mb-2 flex items-center gap-2">
+				<span class="text-sm font-medium">Look up a barcode</span>
+				<span id="off-barcode-indicator" class="htmx-indicator text-xs text-slate-400 dark:text-slate-500">Looking up…</span>
+			</div>
+			<input
+				type="text"
+				name="barcode"
+				placeholder="e.g. 3017620422003"
+				class="vx-input mt-0"
+				hx-get="/meals/import/off/search"
+				hx-trigger="keyup changed delay:300ms, search"
+				hx-target="#off-barcode-results"
+				hx-swap="innerHTML"
+				hx-indicator="#off-barcode-indicator"
+				hx-sync="this:replace"
+			/>
+			<div id="off-barcode-results" class="mt-2"></div>
+		</div>
+	}
+}
+
+templ MealieResults(results []mealie.SearchResult) {
+	if len(results) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching recipes.</p>
+	} else {
+		<ul class="vx-list">
+			for _, r := range results {
+				<li class="flex items-center justify-between gap-3 px-3 py-2">
+					<span class="text-sm">{ r.Name }</span>
+					<button
+						type="button"
+						hx-post={ "/meals/import/mealie/" + r.Slug }
+						class="vx-link-accent text-xs"
+					>
+						Import
+					</button>
+				</li>
+			}
+		</ul>
+	}
+}
+
+templ OFFResults(products []openfoodfacts.Product) {
+	if len(products) == 0 {
+		<p class="px-2 py-1 text-xs text-slate-400 dark:text-slate-500">No matching products.</p>
+	} else {
+		<ul class="vx-list">
+			for _, p := range products {
+				<li class="flex items-center justify-between gap-3 px-3 py-2">
+					<div>
+						<div class="text-sm">{ p.DisplayName() }</div>
+						<div class="text-xs text-slate-400 dark:text-slate-500">{ p.Barcode }</div>
+					</div>
+					<button
+						type="button"
+						hx-post={ "/meals/import/off/" + p.Barcode }
+						class="vx-link-accent text-xs"
+					>
+						Import
+					</button>
+				</li>
+			}
+		</ul>
+	}
+}

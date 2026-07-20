@@ -1,0 +1,238 @@
+package settings
+
+import (
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+// Row is one nutrient's goal-range form row. Every *Raw field is the exact
+// display string (blank if unset) — on a validation error the handler
+// passes back exactly what the user typed, not a re-parsed/re-formatted
+// value, so a typo in one field never discards what they entered elsewhere.
+// IdealMin/IdealMax are an optional narrower "sweet spot" inside Min/Max
+// (e.g. sugar might have no Min, an IdealMax of 30g, and a hard Max of
+// 50g) — see internal/goals.Goal's doc comment for the full model.
+type Row struct {
+	NutrientID  int16
+	DisplayName string
+	Unit        string
+	MinRaw      string
+	MaxRaw      string
+	IdealMinRaw string
+	IdealMaxRaw string
+}
+
+// UserRow is one existing account shown in the admin-only "Users" section.
+type UserRow struct {
+	Email       string
+	DisplayName string
+	IsAdmin     bool
+	CreatedAt   string // pre-formatted for display
+}
+
+// UsersSection holds the admin-only "manage users" data. Passed as nil to
+// omit the whole section — used whenever the viewer isn't a password-mode
+// admin, so a non-admin (or an OIDC-mode instance, which has no local
+// accounts to manage) never even sees the form exists.
+type UsersSection struct {
+	Users     []UserRow
+	CreateErr string
+}
+
+templ Page(csrfToken string, rows []Row, infoURL string, errMsg string, usersSection *UsersSection) {
+	@layout.Base("Configuration", csrfToken) {
+		<h1 class="mb-4 text-lg font-semibold">Configuration</h1>
+		if errMsg != "" {
+			<div class="vx-alert-error mb-4">
+				{ errMsg }
+			</div>
+		}
+		<form method="POST" action="/settings/info-url" class="mb-6">
+			<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+			<div class="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
+				<label class="block text-sm font-medium">
+					How to set healthy targets
+					<span class="font-normal text-amber-700 dark:text-amber-500">(shown to every user on this Victus instance — not personal to your account)</span>
+					<input
+						type="url"
+						name="info_url"
+						required
+						value={ infoURL }
+						placeholder="https://…"
+						class="vx-input"
+					/>
+				</label>
+				<button type="submit" class="vx-btn-primary mt-3">
+					Save link
+				</button>
+			</div>
+		</form>
+
+		<form method="POST" action="/settings" class="space-y-6">
+			<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+
+			<div class="vx-card p-4">
+				<div class="mb-1 text-sm font-medium">Daily goal ranges</div>
+				<div class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+					Personal to your account — other users on this instance set their own. Min/Max are hard
+					bounds (colored red outside them); Ideal is an optional narrower target inside them
+					(colored amber inside Min/Max but outside Ideal, green inside Ideal).
+				</div>
+				<div class="divide-y divide-slate-100 dark:divide-slate-800">
+					for _, row := range rows {
+						<div class="flex flex-wrap items-end justify-between gap-4 py-3">
+							<div class="text-sm">
+								{ row.DisplayName } <span class="text-slate-400 dark:text-slate-500">({ row.Unit })</span>
+							</div>
+							<div class="flex flex-wrap items-end gap-3">
+								<label class="text-center text-xs text-slate-400 dark:text-vxmuted">
+									Min
+									<input
+										type="number"
+										step="any"
+										min="0"
+										name={ "min_" + NutrientIDStr(row.NutrientID) }
+										value={ row.MinRaw }
+										placeholder="–"
+										class="vx-input mt-1 w-20 py-1"
+									/>
+								</label>
+								<label class="text-center text-xs text-slate-400 dark:text-vxmuted">
+									Ideal
+									<div class="mt-1 flex items-center gap-1">
+										<input
+											type="number"
+											step="any"
+											min="0"
+											name={ "ideal_min_" + NutrientIDStr(row.NutrientID) }
+											value={ row.IdealMinRaw }
+											placeholder="–"
+											class="vx-input mt-0 w-20 py-1"
+										/>
+										<span class="text-slate-400 dark:text-slate-500">–</span>
+										<input
+											type="number"
+											step="any"
+											min="0"
+											name={ "ideal_max_" + NutrientIDStr(row.NutrientID) }
+											value={ row.IdealMaxRaw }
+											placeholder="–"
+											class="vx-input mt-0 w-20 py-1"
+										/>
+									</div>
+								</label>
+								<label class="text-center text-xs text-slate-400 dark:text-vxmuted">
+									Max
+									<input
+										type="number"
+										step="any"
+										min="0"
+										name={ "max_" + NutrientIDStr(row.NutrientID) }
+										value={ row.MaxRaw }
+										placeholder="–"
+										class="vx-input mt-1 w-20 py-1"
+									/>
+								</label>
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+
+			<button type="submit" class="vx-btn-primary">
+				Save goals
+			</button>
+		</form>
+
+		if usersSection != nil {
+			<div class="vx-card mt-6 p-4">
+				<div class="mb-3 text-sm font-medium">Users</div>
+				<div class="mb-4 divide-y divide-slate-100 dark:divide-slate-800">
+					for _, u := range usersSection.Users {
+						<div class="flex items-center justify-between gap-3 py-2 text-sm">
+							<div>
+								<span>{ u.Email }</span>
+								if u.DisplayName != "" {
+									<span class="text-slate-400 dark:text-slate-500">({ u.DisplayName })</span>
+								}
+								if u.IsAdmin {
+									<span class="vx-badge ml-2">admin</span>
+								}
+							</div>
+							<span class="text-xs text-slate-400 dark:text-slate-500">{ u.CreatedAt }</span>
+						</div>
+					}
+				</div>
+
+				if usersSection.CreateErr != "" {
+					<div class="vx-alert-error mb-3">
+						{ usersSection.CreateErr }
+					</div>
+				}
+
+				<form method="POST" action="/settings/users" class="flex flex-wrap items-end gap-2">
+					<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+					<label class="text-sm">
+						Email
+						<input type="email" name="email" required class="vx-input w-48"/>
+					</label>
+					<label class="text-sm">
+						Display name
+						<input type="text" name="display_name" class="vx-input w-40"/>
+					</label>
+					<label class="text-sm">
+						Password
+						<input type="password" name="password" required minlength="8" class="vx-input w-40"/>
+					</label>
+					<button type="submit" class="vx-btn-primary px-3 py-1.5">
+						Add user
+					</button>
+				</form>
+			</div>
+		}
+
+		<div class="vx-card mt-6 p-4">
+			<div class="mb-1 text-sm font-medium">Export / Import</div>
+			<div class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+				Move data between Victus instances (including between a Postgres-backed and a
+				SQLite-backed one) — download a file here, then upload it on another instance, or
+				keep it as a manual backup.
+			</div>
+			<form method="POST" action="/settings/export" class="mb-4 space-y-2">
+				<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+				<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="meal_categories" value="true"/> Meal categories
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="meal_labels" value="true"/> Meal labels
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="meals" value="true"/> Meals (recipes + nutrients)
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="goals" value="true"/> My nutrient goal ranges
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="default_day" value="true"/> My Default Day template
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="day_plans" value="true"/> My day/week plan history
+					</label>
+					<label class="flex items-center gap-2">
+						<input type="checkbox" name="app_settings" value="true"/> App-wide settings (info URL)
+					</label>
+				</div>
+				<button type="submit" class="vx-btn-primary px-3 py-1.5">
+					Export selected
+				</button>
+			</form>
+			<form method="POST" action="/settings/import" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2">
+				<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
+				<input type="file" name="file" accept="application/json" required class="text-sm"/>
+				<button type="submit" class="vx-btn-primary px-3 py-1.5">
+					Import from file
+				</button>
+			</form>
+		</div>
+	}
+}

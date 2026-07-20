@@ -1,0 +1,53 @@
+package settings
+
+import (
+	"github.com/Stasky745/victus/web/templates/layout"
+)
+
+// ImportResult summarizes what an import actually did — mirrors
+// internal/exportimport.ImportResult field-for-field, kept as a separate
+// type so this package doesn't depend on internal/exportimport's Go types.
+type ImportResult struct {
+	CategoriesCreated, CategoriesUnchanged       int
+	LabelsCreated, LabelsUpdated                 int
+	MealsCreated, MealsUpdated                   int
+	GoalsSet                                     int
+	DefaultDayItemsAdded, DefaultDayItemsSkipped int
+	DayPlanItemsAdded, DayPlanItemsSkipped       int
+	AppSettingsSet                                int
+	Warnings                                      []string
+}
+
+templ ImportResultPage(csrfToken string, result ImportResult) {
+	@layout.Base("Import result", csrfToken) {
+		<h1 class="mb-4 text-lg font-semibold">Import result</h1>
+		<div class="vx-card space-y-1 p-4 text-sm">
+			<div>Meal categories: { toStr(result.CategoriesCreated) } created, { toStr(result.CategoriesUnchanged) } already existed</div>
+			<div>Meal labels: { toStr(result.LabelsCreated) } created, { toStr(result.LabelsUpdated) } updated</div>
+			<div>Meals: { toStr(result.MealsCreated) } created, { toStr(result.MealsUpdated) } updated</div>
+			if result.GoalsSet > 0 {
+				<div>Nutrient goals: { toStr(result.GoalsSet) } set</div>
+			}
+			if result.DefaultDayItemsAdded > 0 || result.DefaultDayItemsSkipped > 0 {
+				<div>Default Day items: { toStr(result.DefaultDayItemsAdded) } added, { toStr(result.DefaultDayItemsSkipped) } skipped</div>
+			}
+			if result.DayPlanItemsAdded > 0 || result.DayPlanItemsSkipped > 0 {
+				<div>Day plan items: { toStr(result.DayPlanItemsAdded) } added, { toStr(result.DayPlanItemsSkipped) } skipped</div>
+			}
+			if result.AppSettingsSet > 0 {
+				<div>App-wide settings: { toStr(result.AppSettingsSet) } set</div>
+			}
+		</div>
+		if len(result.Warnings) > 0 {
+			<div class="vx-alert-error mt-4">
+				<div class="mb-2 font-medium">{ toStr(len(result.Warnings)) } item(s) skipped:</div>
+				<ul class="list-inside list-disc space-y-1">
+					for _, w := range result.Warnings {
+						<li>{ w }</li>
+					}
+				</ul>
+			</div>
+		}
+		<a href="/settings" class="vx-link mt-6 inline-block">Back to Configuration</a>
+	}
+}
