@@ -39,4 +39,4 @@ pre-commit:
 commit-msg:
   commands:
     git-secrets-commit-msg:
-      run: git secrets --scan --commit-msg-file {1}
+      run: git secrets --scan {1}
