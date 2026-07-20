@@ -292,6 +292,43 @@ func TestCategories_CreateRenameDelete(t *testing.T) {
 	}
 }
 
+// TestCategories_Reorder drives the Meal Categories page's drag-and-drop
+// reorder endpoint directly (its JS driver isn't exercised by Go tests) —
+// submitting an explicit order must be reflected in the rendered list.
+func TestCategories_Reorder(t *testing.T) {
+	srv, pool := newTestServerAndPool(t)
+	c := newAuthenticatedClient(t, pool, srv)
+
+	token := c.csrfToken("/meals/categories")
+	for _, name := range []string{"Zzz Last", "Aaa First"} {
+		rec := c.postForm("/meals/categories", url.Values{"name": {name}}, token)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("create category %q: status = %d", name, rec.Code)
+		}
+	}
+
+	list := c.get("/meals/categories").Body.String()
+	zID := extractCategoryID(t, list, "Zzz Last")
+	aID := extractCategoryID(t, list, "Aaa First")
+
+	// Both were appended in creation order (Zzz, then Aaa) — reorder them
+	// the other way around.
+	reorderToken := c.csrfToken("/meals/categories")
+	reorderRec := c.postForm("/meals/categories/reorder", url.Values{"order_ids": {aID, zID}}, reorderToken)
+	if reorderRec.Code != http.StatusOK {
+		t.Fatalf("reorder: status = %d, body = %s", reorderRec.Code, reorderRec.Body.String())
+	}
+
+	after := c.get("/meals/categories").Body.String()
+	aPos, zPos := strings.Index(after, "Aaa First"), strings.Index(after, "Zzz Last")
+	if aPos == -1 || zPos == -1 {
+		t.Fatalf("expected both categories still in the list, got: %s", after)
+	}
+	if aPos >= zPos {
+		t.Errorf("expected Aaa First to now come before Zzz Last, got positions %d, %d", aPos, zPos)
+	}
+}
+
 // extractMealID pulls a meal's UUID out of its edit link
 // (href="/meals/<uuid>/edit") on a rendered list page, by locating the <li>
 // whose text contains name.

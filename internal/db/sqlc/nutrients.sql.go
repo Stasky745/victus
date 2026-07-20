@@ -166,6 +166,22 @@ func (q *Queries) SetAppSetting(ctx context.Context, arg SetAppSettingParams) er
 	return err
 }
 
+const setMealCategorySortOrder = `-- name: SetMealCategorySortOrder :exec
+UPDATE meal_categories SET sort_order = $1 WHERE id = $2
+`
+
+type SetMealCategorySortOrderParams struct {
+	SortOrder int16     `json:"sort_order"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// Drag-and-drop reorder: re-numbering every category's position without
+// touching its name, unlike UpdateMealCategory which requires both.
+func (q *Queries) SetMealCategorySortOrder(ctx context.Context, arg SetMealCategorySortOrderParams) error {
+	_, err := q.db.ExecContext(ctx, setMealCategorySortOrder, arg.SortOrder, arg.ID)
+	return err
+}
+
 const updateMealCategory = `-- name: UpdateMealCategory :one
 UPDATE meal_categories SET name = $1, sort_order = $2 WHERE id = $3
 RETURNING id, name, sort_order

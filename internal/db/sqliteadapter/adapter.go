@@ -317,6 +317,10 @@ func (a *Queries) SetAppSetting(ctx context.Context, arg sqlc.SetAppSettingParam
 	return a.q.SetAppSetting(ctx, sqlite.SetAppSettingParams(arg))
 }
 
+func (a *Queries) SetMealCategorySortOrder(ctx context.Context, arg sqlc.SetMealCategorySortOrderParams) error {
+	return a.q.SetMealCategorySortOrder(ctx, sqlite.SetMealCategorySortOrderParams(arg))
+}
+
 func (a *Queries) SetMealNutrientValue(ctx context.Context, arg sqlc.SetMealNutrientValueParams) error {
 	return a.q.SetMealNutrientValue(ctx, sqlite.SetMealNutrientValueParams(arg))
 }

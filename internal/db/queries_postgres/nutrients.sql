@@ -13,6 +13,11 @@ RETURNING *;
 UPDATE meal_categories SET name = $1, sort_order = $2 WHERE id = $3
 RETURNING *;
 
+-- name: SetMealCategorySortOrder :exec
+-- Drag-and-drop reorder: re-numbering every category's position without
+-- touching its name, unlike UpdateMealCategory which requires both.
+UPDATE meal_categories SET sort_order = $1 WHERE id = $2;
+
 -- name: DeleteMealCategory :exec
 DELETE FROM meal_categories WHERE id = $1;
 

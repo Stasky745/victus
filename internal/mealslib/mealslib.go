@@ -220,6 +220,26 @@ func (s *Store) DeleteCategory(ctx context.Context, id uuid.UUID) error {
 	return s.q.DeleteMealCategory(ctx, id)
 }
 
+// ReorderCategories re-numbers every category in orderedIDs to match that
+// order (1-indexed), in one transaction — the Meal Categories page's
+// drag-and-drop reorder. An id that no longer exists (a delete racing the
+// drag) is simply a no-op UPDATE affecting zero rows, not an error — the
+// drag that produced this list already reflects reality as of when it
+// started.
+func (s *Store) ReorderCategories(ctx context.Context, orderedIDs []uuid.UUID) error {
+	return s.withTx(ctx, func(q sqlc.Querier) error {
+		for i, id := range orderedIDs {
+			if err := q.SetMealCategorySortOrder(ctx, sqlc.SetMealCategorySortOrderParams{
+				SortOrder: int16(i + 1), //nolint:gosec // category counts are tiny, never near int16 overflow
+				ID:        id,
+			}); err != nil {
+				return fmt.Errorf("set category sort order: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
 func (s *Store) getCategory(ctx context.Context, id uuid.UUID) (sqlc.MealCategory, error) {
 	cats, err := s.q.ListMealCategories(ctx)
 	if err != nil {

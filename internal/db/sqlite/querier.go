@@ -104,6 +104,9 @@ type Querier interface {
 	// See SearchMeals for why query is a pre-built trigram-OR match expression.
 	SearchMealsByLabel(ctx context.Context, arg SearchMealsByLabelParams) ([]Meal, error)
 	SetAppSetting(ctx context.Context, arg SetAppSettingParams) error
+	// Drag-and-drop reorder: re-numbering every category's position without
+	// touching its name, unlike UpdateMealCategory which requires both.
+	SetMealCategorySortOrder(ctx context.Context, arg SetMealCategorySortOrderParams) error
 	SetMealNutrientValue(ctx context.Context, arg SetMealNutrientValueParams) error
 	SetUserNutrientGoal(ctx context.Context, arg SetUserNutrientGoalParams) error
 	UpdateDayPlanItemQuantity(ctx context.Context, arg UpdateDayPlanItemQuantityParams) error

@@ -20,9 +20,11 @@ templ CategoriesPage(csrfToken string, categories []sqlc.MealCategory, errorMsg 
 				{ errorMsg }
 			</div>
 		}
-		<ul class="vx-list mb-6">
+		<p class="mb-2 text-xs text-slate-500 dark:text-slate-400">Drag by the ⠿ handle to reorder.</p>
+		<ul id="category-list" class="vx-list mb-6">
 			for _, c := range categories {
-				<li class="flex items-center justify-between gap-4 px-4 py-3">
+				<li data-category-id={ idString(c.ID) } class="flex items-center gap-2 px-4 py-3">
+					<span class="drag-handle shrink-0 cursor-grab select-none text-slate-400 active:cursor-grabbing dark:text-slate-500" aria-hidden="true">⠿</span>
 					<form action={ templ.URL("/meals/categories/" + idString(c.ID)) } method="POST" class="flex flex-1 items-center gap-2">
 						<input type="hidden" name={ layout.CSRFFieldName } value={ csrfToken }/>
 						<input type="text" name="name" value={ c.Name } class="vx-input mt-0 w-full max-w-xs"/>
@@ -53,5 +55,7 @@ templ CategoriesPage(csrfToken string, categories []sqlc.MealCategory, errorMsg 
 				Add
 			</button>
 		</form>
+		<script src="/static/sortable.min.js"></script>
+		<script src="/static/categories.js"></script>
 	}
 }

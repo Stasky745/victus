@@ -1,14 +1,28 @@
 # Generated code (templ/sqlc) and compiled static assets (Tailwind CSS, vendored htmx)
 # are committed to the repo, so the build stage only needs `go build` — no templ/sqlc/
 # node/npm toolchain inside the image.
-FROM golang:1.26-alpine AS builder
+#
+# --platform=$BUILDPLATFORM pins this stage to the build host's own
+# architecture regardless of which platform the final image targets — Go
+# cross-compiles cleanly with CGO_ENABLED=0 (no C toolchain needed), so
+# there's no reason to pay QEMU's emulation cost compiling under linux/arm64
+# just to produce an arm64 binary. Only the lightweight final stage below
+# (apk add, adduser, a few file ops) actually needs to run as the target
+# architecture.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 WORKDIR /src
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/victus ./cmd/victus
+RUN --mount=type=cache,target=/root/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /out/victus ./cmd/victus
 
 FROM alpine:3.24 AS runtime
 RUN apk add --no-cache ca-certificates && \

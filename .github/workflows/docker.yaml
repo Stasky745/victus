@@ -16,6 +16,8 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # Same cache scope the release workflow's linux/amd64 leg uses, so a
+      # PR merged to main leaves a warm cache behind for the next release.
       - name: Build image (local, not pushed)
         uses: docker/build-push-action@v7
         with:
@@ -23,6 +25,8 @@ jobs:
           push: false
           load: true
           tags: victus:ci
+          cache-from: type=gha,scope=image-amd64
+          cache-to: type=gha,mode=max,scope=image-amd64
 
       - name: Scan image for vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0

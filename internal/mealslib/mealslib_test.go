@@ -264,6 +264,60 @@ func TestStore_RenameCategory_NonexistentReturnsErrCategoryNotFound(t *testing.T
 	}
 }
 
+// TestStore_ReorderCategories guards the Meal Categories page's
+// drag-and-drop reorder: the submitted order must be exactly what
+// ListCategories returns afterward, and an id that no longer exists (a
+// delete racing the drag) must be skipped rather than failing the whole
+// reorder.
+func TestStore_ReorderCategories(t *testing.T) {
+	store, _ := newTestStore(t)
+	ctx := t.Context()
+
+	a, err := store.CreateCategory(ctx, "Reorder A-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("create category a: %v", err)
+	}
+	b, err := store.CreateCategory(ctx, "Reorder B-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("create category b: %v", err)
+	}
+	c, err := store.CreateCategory(ctx, "Reorder C-"+uuid.NewString())
+	if err != nil {
+		t.Fatalf("create category c: %v", err)
+	}
+
+	// Reorder to C, A, B — and throw in a nonexistent id (simulating a
+	// delete that raced the drag) to confirm it's silently ignored.
+	ghost := uuid.New()
+	if err := store.ReorderCategories(ctx, []uuid.UUID{c.ID, ghost, a.ID, b.ID}); err != nil {
+		t.Fatalf("reorder categories: %v", err)
+	}
+
+	all, err := store.ListCategories(ctx)
+	if err != nil {
+		t.Fatalf("list categories: %v", err)
+	}
+	gotOrder := indexOfEach(all, c.ID, a.ID, b.ID)
+	if gotOrder[0] >= gotOrder[1] || gotOrder[1] >= gotOrder[2] {
+		t.Errorf("expected order C, A, B among the reordered categories, got positions %v (full list: %+v)", gotOrder, all)
+	}
+}
+
+// indexOfEach returns each id's position in list, in the order the ids were
+// passed in — a small helper for asserting relative order among a subset of
+// a longer list (which may also contain the seeded default categories).
+func indexOfEach(list []sqlc.MealCategory, ids ...uuid.UUID) []int {
+	positions := make(map[uuid.UUID]int, len(list))
+	for i, c := range list {
+		positions[c.ID] = i
+	}
+	out := make([]int, len(ids))
+	for i, id := range ids {
+		out[i] = positions[id]
+	}
+	return out
+}
+
 // TestStore_DeleteCategory_BlockedByFKWhenInUse guards the foreign key that
 // already exists today (day_plan_items.category_id REFERENCES
 // meal_categories(id)) even though no UI creates day plans until M3 — the

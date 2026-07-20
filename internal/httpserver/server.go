@@ -230,6 +230,7 @@ func New(cfg *config.Config, sqlDB *sql.DB, oidcAuth *auth.Authenticator, opts .
 		r.Post("/meals", s.handleMealCreate)
 		r.Get("/meals/categories", s.handleCategoriesList)
 		r.Post("/meals/categories", s.handleCategoryCreate)
+		r.Post("/meals/categories/reorder", s.handleCategoryReorder)
 		r.Post("/meals/categories/{id}", s.handleCategoryRename)
 		r.Post("/meals/categories/{id}/delete", s.handleCategoryDelete)
 		r.Get("/meals/labels", s.handleLabelsList)

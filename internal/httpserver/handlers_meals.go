@@ -441,6 +441,24 @@ func (s *Server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/meals/categories", http.StatusSeeOther)
 }
 
+// handleCategoryReorder persists the Meal Categories page's drag-and-drop
+// order. No response body is needed — the dragged DOM order is already
+// correct client-side, this just makes it durable — so a bare 200 is the
+// whole response; the page's own JS reloads on a non-2xx to recover the
+// real order if the request fails.
+func (s *Server) handleCategoryReorder(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "couldn't read the submitted form", http.StatusBadRequest)
+		return
+	}
+	orderedIDs := parseUUIDs(r.Form["order_ids"])
+	if err := s.meals.ReorderCategories(r.Context(), orderedIDs); err != nil {
+		httperr.Internal(w, r, "failed to reorder categories", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) rerenderCategories(w http.ResponseWriter, r *http.Request, errMsg string) {
 	cats, err := s.meals.ListCategories(r.Context())
 	if err != nil {
